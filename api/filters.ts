@@ -12,7 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const response = await fetch(`${GREADER_API_URL}/reader/api/0/tag/list?output=json`, {
             method: 'GET',
             headers: {
-                'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,
+                'Authorization': `${AUTH_TOKEN}`,
             },
         });
 
