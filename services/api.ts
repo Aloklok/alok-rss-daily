@@ -209,34 +209,44 @@ export const editArticleTag = async (articleId: string | number, tagsToAdd: stri
     console.log(`Updated tags for ${articleId}:`, article.tags);
 };
 
-const internalGetArticles = (filter: Filter): Article[] => {
-    switch (filter.type) {
-        case 'category':
-            return MOCK_ARTICLES.filter(a => a.category === filter.value);
-        case 'tag':
-            const tagLabel = filter.value;
-            const tagId = MOCK_TAGS.find(t => t.label === tagLabel)?.id;
-            return MOCK_ARTICLES.filter(a => a.tags?.includes(tagId || ''));
-        case 'starred':
-            return MOCK_ARTICLES.filter(a => a.tags?.includes('user/-/state/com.google/starred'));
-        default:
-            return [];
+export const getArticlesByCategory = async (category: string): Promise<Article[]> => {
+    try {
+        const response = await fetch(`/api/articles?type=category&value=${encodeURIComponent(category)}`);
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`Failed to fetch articles for category ${category}, falling back to mock data:`, error);
+        return MOCK_ARTICLES.filter(a => a.category === category);
     }
 };
 
-export const getArticlesByCategory = async (category: string): Promise<Article[]> => {
-    await sleep(400);
-    return internalGetArticles({ type: 'category', value: category });
-};
-
 export const getArticlesByTag = async (tag: string): Promise<Article[]> => {
-    await sleep(400);
-    return internalGetArticles({ type: 'tag', value: tag });
+    try {
+        const response = await fetch(`/api/articles?type=tag&value=${encodeURIComponent(tag)}`);
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`Failed to fetch articles for tag ${tag}, falling back to mock data:`, error);
+        const tagId = MOCK_TAGS.find(t => t.label === tag)?.id;
+        return MOCK_ARTICLES.filter(a => a.tags?.includes(tagId || ''));
+    }
 };
 
 export const getStarredArticles = async (): Promise<Article[]> => {
-    await sleep(400);
-    return internalGetArticles({ type: 'starred', value: 'true' });
+    try {
+        const response = await fetch(`/api/articles?type=starred`);
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`Failed to fetch starred articles, falling back to mock data:`, error);
+        return MOCK_ARTICLES.filter(a => a.tags?.includes('user/-/state/com.google/starred'));
+    }
 };
 
 export const getAvailableFilters = async (): Promise<AvailableFilters> => {
