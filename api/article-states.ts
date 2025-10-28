@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const GREADER_API_URL = process.env.FRESHRSS_API_BASE_URL;
+const GREADER_API_URL = process.env.FRESHRSS_API_URL;
 const AUTH_TOKEN = process.env.FRESHRSS_AUTH_TOKEN;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
