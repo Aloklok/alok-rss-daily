@@ -156,7 +156,10 @@ const App: React.FC = () => {
 
         try {
             const originalArticle = originalReports.flatMap(r => r.articles).find(a => a.id === articleId);
-            const originalTags = originalArticle?.tags || [];
+            // FIX: Explicitly type `originalTags` to address type inference issues where `reports`
+            // state might contain untyped objects from the API, causing `originalTags` to be inferred as `any[]`.
+            // This ensures `originalUserTags` becomes `Set<string>` and subsequent variables are correctly typed.
+            const originalTags: string[] = originalArticle?.tags || [];
             
             const isNowStarred = newTags.includes('user/-/state/com.google/starred');
             const wasStarred = originalTags.includes('user/-/state/com.google/starred');

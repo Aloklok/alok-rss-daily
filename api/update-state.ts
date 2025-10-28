@@ -19,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const apiPath = `${GREADER_API_URL}/reader/api/0/edit-tag`;
+        const apiPath = `${GREADER_API_URL}/greader.php/reader/api/0/edit-tag`;
         
         const params = new URLSearchParams();
         params.append('i', String(articleId)); // 'i' is the item ID parameter for GReader API

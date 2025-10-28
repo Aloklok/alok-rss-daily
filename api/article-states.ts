@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
         // FreshRSS doesn't have a bulk state lookup. We have to fetch all items
         // with their states and then filter.
-        const response = await fetch(`${GREADER_API_URL}/reader/api/0/stream/contents/?output=json`, {
+        const response = await fetch(`${GREADER_API_URL}/greader.php/reader/api/0/stream/contents/?output=json`, {
             method: 'GET',
             headers: { 'Authorization': `GoogleLogin auth=${AUTH_TOKEN}` },
         });
