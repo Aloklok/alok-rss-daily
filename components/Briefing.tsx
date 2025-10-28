@@ -1,0 +1,640 @@
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Article, BriefingReport, Tag, Filter } from '../types';
+import { editArticleState, getTags, editArticleTag } from '../services/api';
+
+const parseBold = (text: string) => {
+  if (!text) return '';
+  const parts = text.split(/\*\*(.*?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? <strong key={i} className="font-semibold text-current">{part}</strong> : part
+  );
+};
+
+const CALLOUT_THEMES = {
+  '一句话总结': { icon: '📝', color: 'fuchsia' },
+  '技术洞察': { icon: '🔬', color: 'teal' },
+  '值得注意': { icon: '⚠️', color: 'amber' },
+  '市场观察': { icon: '📈', color: 'sky' },
+} as const;
+
+
+const calloutCardClasses = {
+    fuchsia: { bg: 'bg-fuchsia-400/30', title: 'text-fuchsia-950', body: 'text-fuchsia-900' },
+    teal: { bg: 'bg-teal-400/30', title: 'text-teal-950', body: 'text-teal-900' },
+    amber: { bg: 'bg-amber-400/30', title: 'text-amber-950', body: 'text-amber-900' },
+    sky: { bg: 'bg-sky-400/30', title: 'text-sky-950', body: 'text-sky-900' },
+};
+
+
+const tagColorClasses = [
+    'bg-sky-100 text-sky-800',
+    'bg-emerald-100 text-emerald-800',
+    'bg-violet-100 text-violet-800',
+    'bg-rose-100 text-rose-800',
+    'bg-amber-100 text-amber-800',
+    'bg-cyan-100 text-cyan-800',
+];
+
+const getRandomColorClass = (key: string) => {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+        hash = key.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash % tagColorClasses.length);
+    return tagColorClasses[index];
+};
+
+
+interface CalloutProps {
+  title: keyof typeof CALLOUT_THEMES;
+  children: React.ReactNode;
+}
+
+const Callout: React.FC<CalloutProps> = ({ title, children }) => {
+    const theme = CALLOUT_THEMES[title];
+    const colors = calloutCardClasses[theme.color];
+
+    return (
+        <aside className={`rounded-2xl p-5 backdrop-blur-lg ring-1 ring-white/30 ${colors.bg}`}>
+            <div className="flex items-center gap-x-3 mb-3">
+                <span className="text-2xl">{theme.icon}</span>
+                <h4 className={`text-lg font-bold ${colors.title}`}>{title}</h4>
+            </div>
+            <div className={`${colors.body} text-[15px] leading-relaxed font-medium`}>
+                {children}
+            </div>
+        </aside>
+    );
+};
+
+
+interface TagPopoverProps {
+    article: Article;
+    onClose: () => void;
+    onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
+}
+
+const TagPopover: React.FC<TagPopoverProps> = ({ article, onClose, onStateChange }) => {
+    const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+    const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set(article.tags?.filter(t => !t.startsWith('user/-/state')) || []));
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    
+    const popoverRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const fetchTags = async () => {
+            setIsLoading(true);
+            try {
+                const tags = await getTags();
+                setAvailableTags(tags);
+            } catch (error) {
+                console.error("Failed to fetch tags", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchTags();
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+                onClose();
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [onClose]);
+
+    const handleTagChange = (tagId: string) => {
+        setSelectedTags(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(tagId)) {
+                newSet.delete(tagId);
+            } else {
+                newSet.add(tagId);
+            }
+            return newSet;
+        });
+    };
+
+    const handleConfirm = async () => {
+        setIsSaving(true);
+        const stateTags = article.tags?.filter(t => t.startsWith('user/-/state')) || [];
+        const newTags = [...stateTags, ...Array.from(selectedTags)];
+        
+        try {
+            await onStateChange(article.id, newTags);
+            onClose();
+        } catch (error) {
+            console.error("Failed to save tags", error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    return (
+        <div ref={popoverRef} className="absolute bottom-full mb-2 w-64 bg-white rounded-lg shadow-2xl border border-gray-200 z-10 right-0 md:left-1/2 md:-translate-x-1/2">
+            <div className="p-4 border-b">
+                <h4 className="font-semibold text-gray-800">编辑标签</h4>
+            </div>
+            {isLoading ? (
+                <div className="p-4 text-center text-gray-500">加载中...</div>
+            ) : (
+                <div className="p-4 max-h-60 overflow-y-auto">
+                    <div className="space-y-3">
+                        {availableTags.map(tag => (
+                            <label key={tag.id} className="flex items-center space-x-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedTags.has(tag.id)}
+                                    onChange={() => handleTagChange(tag.id)}
+                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-gray-700">{tag.label}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
+            <div className="p-3 bg-gray-50 flex justify-end space-x-2 rounded-b-lg">
+                <button onClick={onClose} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
+                <button 
+                    onClick={handleConfirm}
+                    disabled={isSaving || isLoading}
+                    className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:bg-blue-300"
+                >
+                    {isSaving ? '保存中...' : '确认'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const SpinnerIcon = () => (
+    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+);
+
+
+interface ActionButtonsProps {
+    article: Article;
+    onReaderModeRequest: (article: Article) => void;
+    onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
+    onPreviewArticle: (url: string) => void;
+}
+
+const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequest, onStateChange, onPreviewArticle }) => {
+    const STAR_TAG = 'user/-/state/com.google/starred';
+    const READ_TAG = 'user/-/state/com.google/read';
+
+    const isStarred = article.tags?.includes(STAR_TAG) || false;
+    const isRead = article.tags?.includes(READ_TAG) || false;
+    const userTags = article.tags?.filter(tag => tag.startsWith('user/1000/label/')).map(tag => tag.split('/').pop()) || [];
+
+    const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState<'star' | 'read' | null>(null);
+
+    const handleToggleState = async (action: 'star' | 'read') => {
+        setIsLoading(action);
+        const tag = action === 'star' ? STAR_TAG : READ_TAG;
+        const currentTags = article.tags || [];
+        const isActive = currentTags.includes(tag);
+        
+        let newTags;
+        if (isActive) {
+            newTags = currentTags.filter(t => t !== tag);
+        } else {
+            newTags = [...currentTags, tag];
+        }
+
+        try {
+            await onStateChange(article.id, newTags);
+        } finally {
+            setIsLoading(null);
+        }
+    };
+
+    const actionButtonClass = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 transform hover:scale-105 disabled:scale-100 disabled:cursor-wait disabled:opacity-75";
+    const mobileActionButtonClass = "flex flex-col items-center justify-center h-16 w-16 text-xs font-medium rounded-full p-1 gap-1";
+
+    return (
+        <div className="relative mt-8">
+            {/* Desktop Buttons */}
+            <div className="hidden md:flex flex-col">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => onReaderModeRequest(article)} className={`${actionButtonClass} bg-stone-200 hover:bg-stone-300 text-stone-800`}>
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            阅读
+                        </button>
+                        <button onClick={() => onPreviewArticle(article.link)} className={`${actionButtonClass} bg-stone-200 hover:bg-stone-300 text-stone-800`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            预览
+                        </button>
+                        <button onClick={() => handleToggleState('star')} disabled={!!isLoading} className={`${actionButtonClass} ${isStarred ? 'bg-amber-400 text-amber-950' : 'bg-amber-200 hover:bg-amber-300 text-amber-900'}`}>
+                             {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
+                             {isStarred ? '已收藏' : '收藏'}
+                        </button>
+                        <button onClick={() => handleToggleState('read')} disabled={!!isLoading} className={`${actionButtonClass} ${isRead ? 'bg-emerald-400 text-emerald-950' : 'bg-emerald-200 hover:bg-emerald-300 text-emerald-900'}`}>
+                            {isLoading === 'read' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>}
+                            {isRead ? '已读' : '未读'}
+                        </button>
+                         <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className={`${actionButtonClass} bg-sky-200 hover:bg-sky-300 text-sky-900`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                            标签
+                        </button>
+                        {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
+                         {userTags.length > 0 && (
+                            <div className="hidden md:flex flex-wrap gap-2 items-center">
+                                <div className="border-l border-stone-300 h-6 mx-1"></div>
+                                {userTags.map(tag => (
+                                    tag && <span key={tag} className={`text-xs font-semibold inline-block py-1 px-2.5 rounded-full ${getRandomColorClass(tag)}`}>
+                                        {tag}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                     <a href={article.link} target="_blank" rel="noopener noreferrer" className={`${actionButtonClass} bg-stone-200 hover:bg-stone-300 text-stone-800`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
+                        原文
+                    </a>
+                </div>
+            </div>
+
+            {/* Mobile Buttons */}
+            <div className="md:hidden">
+                <div className="flex items-end justify-around">
+                     <button onClick={() => onReaderModeRequest(article)} className={`${mobileActionButtonClass} text-stone-600 bg-stone-100`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>阅读</span>
+                    </button>
+                    <button onClick={() => onPreviewArticle(article.link)} className={`${mobileActionButtonClass} text-stone-600 bg-stone-100`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        <span>预览</span>
+                    </button>
+                    <button onClick={() => handleToggleState('star')} disabled={!!isLoading} className={`${mobileActionButtonClass} ${isStarred ? 'bg-amber-300 text-amber-900' : 'bg-amber-100 text-amber-700'}`}>
+                        {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
+                        <span>{isStarred ? '已收藏' : '收藏'}</span>
+                    </button>
+                     <button onClick={() => handleToggleState('read')} disabled={!!isLoading} className={`${mobileActionButtonClass} ${isRead ? 'bg-emerald-300 text-emerald-900' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {isLoading === 'read' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>}
+                         <span>{isRead ? '已读' : '未读'}</span>
+                    </button>
+                     <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className={`${mobileActionButtonClass} text-sky-700 bg-sky-100`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                        <span>标签</span>
+                    </button>
+                    {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
+                </div>
+                <div className="flex justify-end mt-4">
+                    <a href={article.link} target="_blank" rel="noopener noreferrer" className={`${mobileActionButtonClass} text-stone-600 bg-stone-100`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
+                        <span>原文</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+interface ArticleCardProps {
+  article: Article;
+  onReaderModeRequest: (article: Article) => void;
+  onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
+  onPreviewArticle: (url: string) => void;
+}
+
+const ArticleCard: React.FC<ArticleCardProps> = ({ article, onReaderModeRequest, onStateChange, onPreviewArticle }) => {
+  const publishedDate = new Date(article.published).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+  
+  const allKeywords = [article.category, ...article.keywords];
+  const isStarred = article.tags?.includes('user/-/state/com.google/starred') || false;
+
+  return (
+    <article className="py-12 transition-opacity duration-300">
+      <header className="mb-8">
+        <h3 className="text-3xl lg:text-4xl font-bold font-serif text-stone-900 mb-6 leading-tight flex items-center gap-x-3">
+            {isStarred && <span className="text-amber-400 text-2xl" title="已收藏">⭐️</span>}
+            <span>{article.title}</span>
+        </h3>
+        <div className="space-y-3">
+             <div className="text-sm text-stone-400 flex items-center flex-wrap gap-x-4">
+                <span>{article.sourceName}</span>
+                <span>&bull;</span>
+                <span>发布于 {publishedDate}</span>
+             </div>
+             <div className="text-sm text-stone-600 flex items-center flex-wrap">
+                 <span className="font-medium mr-2">{article.verdict.type}</span>
+                 <span className="mr-2">&bull;</span>
+                 <span className="font-medium mr-2">{article.category}</span>
+                 <span className="mr-2">&bull;</span>
+                 <span className={`font-semibold ${article.verdict.score >= 8 ? 'text-green-600' : article.verdict.score >=6 ? 'text-amber-600' : 'text-red-600'}`}>
+                     评分: {article.verdict.score}/10
+                 </span>
+            </div>
+             {allKeywords && allKeywords.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                    {allKeywords.map(tag => (
+                        <span key={tag} className={`text-xs font-semibold inline-block py-1 px-2.5 rounded-full transition-colors ${getRandomColorClass(tag)}`}>
+                            {tag}
+                        </span>
+                    ))}
+                </div>
+            )}
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <Callout title="一句话总结">{parseBold(article.summary)}</Callout>
+        <Callout title="技术洞察">{parseBold(article.highlights)}</Callout>
+        <Callout title="值得注意">{parseBold(article.critiques)}</Callout>
+        <Callout title="市场观察">{parseBold(article.marketTake)}</Callout>
+      </div>
+
+      <ActionButtons article={article} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} onPreviewArticle={onPreviewArticle} />
+    </article>
+  );
+};
+
+interface ReportContentProps {
+    report: BriefingReport;
+    onReaderModeRequest: (article: Article) => void;
+    onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
+    onPreviewArticle: (url: string) => void;
+}
+
+const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeRequest, onStateChange, onPreviewArticle }) => {
+    const sectionMap = useMemo(() => {
+        const map = new Map<string, Article[]>();
+        report.articles.forEach(article => {
+            if (!map.has(article.briefingSection)) {
+                map.set(article.briefingSection, []);
+            }
+            map.get(article.briefingSection)!.push(article);
+        });
+        return map;
+    }, [report]);
+
+    const handleJump = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
+        e.preventDefault();
+        const element = document.getElementById(targetId);
+        if (element) {
+           element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+    
+    const DecorativeDivider = () => (
+        <div className="flex items-center justify-center my-8">
+            <span className="h-px w-20 bg-stone-200"></span>
+            <span className="mx-4 text-stone-300 text-lg">◆</span>
+            <span className="h-px w-20 bg-stone-200"></span>
+        </div>
+    );
+
+    return (
+        <div>
+            <div className="bg-white/70 backdrop-blur-md p-6 rounded-2xl border border-stone-200/80 shadow-sm mb-12">
+                <div className="md:hidden">
+                    <h3 className="text-2xl font-bold font-serif text-stone-800 flex items-center">
+                        <span>📚 目录</span>
+                        <span className="text-stone-400 mx-2 font-light">/</span>
+                        <span>📝 摘要</span>
+                    </h3>
+                </div>
+                <div className="hidden md:grid grid-cols-2 gap-x-6">
+                    <h3 className="text-2xl font-bold font-serif text-stone-800">📚 目录</h3>
+                    <h3 className="text-2xl font-bold font-serif text-stone-800">📝 摘要</h3>
+                </div>
+                
+                <div className="mt-6">
+                    {Array.from(sectionMap.entries()).map(([sectionTitle, articles]) => (
+                        <div key={sectionTitle}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 border-b-2 border-stone-200 my-2 pb-2">
+                                <div className="py-2">
+                                    <h4 className="font-semibold text-stone-800 text-base">{sectionTitle}</h4>
+                                </div>
+                                <div className="hidden md:block py-2"></div>
+                            </div>
+                            {articles.map(article => (
+                                <div key={article.id}>
+                                    <div className="md:hidden py-3">
+                                        <a 
+                                            href={`#article-${article.id}`} 
+                                            onClick={(e) => handleJump(e, `article-${article.id}`)} 
+                                            className="text-sky-600 hover:text-sky-800 font-medium leading-tight"
+                                        >
+                                            {article.title}
+                                        </a>
+                                        <p className="mt-2 text-base text-stone-600 leading-relaxed">
+                                            {article.tldr}
+                                        </p>
+                                    </div>
+
+                                    <div className="hidden md:grid grid-cols-2 gap-x-6">
+                                        <div className="py-2 flex items-start">
+                                            <a 
+                                                href={`#article-${article.id}`} 
+                                                onClick={(e) => handleJump(e, `article-${article.id}`)} 
+                                                className="text-sky-600 hover:text-sky-800 hover:underline font-medium leading-tight decoration-sky-300 decoration-2"
+                                            >
+                                                {article.title}
+                                            </a>
+                                        </div>
+                                        <div className="py-2 text-base text-stone-600 leading-relaxed flex items-start">
+                                            {article.tldr}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="space-y-4">
+                {report.articles.map((article, index) => (
+                   <div key={article.id} id={`article-${article.id}`} className="scroll-mt-24">
+                     <ArticleCard article={article} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} onPreviewArticle={onPreviewArticle} />
+                     {index < report.articles.length - 1 && <DecorativeDivider />}
+                   </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+
+interface BriefingProps {
+  reports: BriefingReport[];
+  activeFilter: Filter | null;
+  selectedReportId: number | null;
+  onReportSelect: (id: number) => void;
+  onReaderModeRequest: (article: Article) => void;
+  onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
+  onResetFilter: () => void;
+  onPreviewArticle: (url: string) => void;
+}
+
+const GRADIENTS = [
+    'from-rose-400 via-fuchsia-500 to-indigo-500',
+    'from-green-400 via-cyan-500 to-blue-500',
+    'from-amber-400 via-orange-500 to-red-500',
+    'from-teal-400 via-sky-500 to-purple-500',
+    'from-lime-400 via-emerald-500 to-cyan-500'
+];
+
+const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, selectedReportId, onReportSelect, onReaderModeRequest, onStateChange, onResetFilter, onPreviewArticle }) => {
+  const selectedReport = reports.find(r => r.id === selectedReportId);
+
+  const randomGradient = useMemo(() => {
+    if(activeFilter?.type !== 'date') return GRADIENTS[0];
+    const dateAsNumber = new Date(activeFilter.value).getDate();
+    return GRADIENTS[dateAsNumber % GRADIENTS.length];
+  }, [activeFilter]);
+  
+  const isToday = useMemo(() => {
+    if (activeFilter?.type !== 'date') return false;
+    const today = new Date().toISOString().split('T')[0];
+    return activeFilter.value === today;
+  }, [activeFilter]);
+
+  const getGreeting = () => {
+      const hour = new Date().getHours();
+      if (hour < 12) return '早上好';
+      if (hour < 18) return '中午好';
+      return '晚上好';
+  }
+
+  const renderHeader = () => {
+      if (activeFilter?.type === 'date') {
+          const dateObj = new Date(activeFilter.value + 'T00:00:00');
+          const datePart = dateObj.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+          const weekdayPart = dateObj.toLocaleDateString('zh-CN', { weekday: 'long' });
+
+          return (
+             <header className={`mb-12 bg-gradient-to-br ${randomGradient} rounded-2xl p-8 text-white shadow-lg`}>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex-grow">
+                        <div className="mb-4">
+                             <h1 className="text-5xl font-serif font-bold leading-none tracking-tight">
+                                {isToday ? '今天' : datePart}
+                            </h1>
+                             <div className="mt-3 inline-block bg-white/20 backdrop-blur-sm text-white/90 px-4 py-1.5 rounded-full text-lg font-medium">
+                                {isToday ? (
+                                    <>
+                                        <span>{datePart}</span>
+                                        <span className="mx-2 opacity-60">·</span>
+                                        <span>{weekdayPart}</span>
+                                    </>
+                                ) : (
+                                    <span>{weekdayPart}</span>
+                                )}
+                            </div>
+                        </div>
+                        {isToday && reports.length > 0 && <p className="text-xl text-cyan-100">{getGreeting()}，这是您的今日简报。</p>}
+                    </div>
+                    {reports.length > 0 && (
+                         <nav className="mt-6 md:mt-0 flex-shrink-0 bg-black/10 p-1.5 rounded-full flex gap-1">
+                            {reports.map(report => {
+                                const isSelected = report.id === selectedReportId;
+                                return (
+                                    <button
+                                        key={report.id}
+                                        onClick={() => onReportSelect(report.id)}
+                                        className={`px-4 sm:px-5 py-2 text-base font-semibold rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-white/50 ${
+                                            isSelected
+                                                ? 'bg-white text-blue-600 shadow-md'
+                                                : 'text-white/80 hover:bg-white/10'
+                                        }`}
+                                    >
+                                        {report.title.replace('简报','')}
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                    )}
+                </div>
+            </header>
+          );
+      } else if (activeFilter) {
+            const titleMap: Record<Filter['type'], string> = { 
+                category: '分类', 
+                tag: '标签',
+                starred: '⭐ 我的收藏',
+                date: ''
+            };
+          return (
+              <header className="mb-12 p-8 border-b border-gray-200">
+                  <div className="flex items-center text-xl font-semibold text-gray-500">
+                      <button onClick={onResetFilter} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
+                          <span className="text-2xl">🏠</span>
+                          <span>首页</span>
+                      </button>
+                      <span className="mx-3 text-gray-300">/</span>
+                      <div className="text-gray-800">
+                          {titleMap[activeFilter.type]}: 
+                          <span className="ml-2 font-bold text-blue-600">
+                              {activeFilter.type !== 'starred' ? activeFilter.value : ''}
+                          </span>
+                      </div>
+                  </div>
+              </header>
+          );
+      }
+      return null;
+  }
+
+  return (
+    <main className="flex-1 p-6 md:p-8 lg:p-10">
+      <div className="max-w-6xl mx-auto">
+        {renderHeader()}
+        
+        {reports.length > 0 ? (
+            <>
+                {selectedReport ? (
+                    <ReportContent 
+                        report={selectedReport} 
+                        onReaderModeRequest={onReaderModeRequest}
+                        onStateChange={onStateChange}
+                        onPreviewArticle={onPreviewArticle}
+                    />
+                ) : (
+                    <div className="text-center py-20">
+                        <p className="text-stone-500">请选择一份简报进行查看。</p>
+                    </div>
+                )}
+            </>
+        ) : (
+          <div className="text-center py-20">
+            <p className="text-2xl font-semibold text-stone-600">
+                {isToday 
+                    ? '今天暂无简报，请稍后查看。'
+                    : '该日期或分类下没有简报。'
+                }
+            </p>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+};
+
+export default Briefing;
