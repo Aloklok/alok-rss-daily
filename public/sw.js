@@ -1,8 +1,7 @@
 const CACHE_NAME = 'briefing-hub-cache-v1';
 const urlsToCache = [
   '/',
-  '/index.html',
-  'https://cdn.tailwindcss.com'
+  '/index.html'
 ];
 
 self.addEventListener('install', event => {
