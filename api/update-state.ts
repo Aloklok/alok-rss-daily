@@ -1,30 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const GREADER_API_URL = process.env.FRESHRSS_API_URL;
-const FRESHRSS_USER = process.env.FRESHRSS_USER;
-const FRESHRSS_PASS = process.env.FRESHRSS_PASS;
-
-let authToken: string | null = null;
-
-const getAuthToken = async (): Promise<string> => {
-    if (authToken) return authToken;
-    const params = new URLSearchParams({ Email: FRESHRSS_USER!, Passwd: FRESHRSS_PASS! });
-    const response = await fetch(`${GREADER_API_URL}/accounts/ClientLogin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params,
-    });
-    if (!response.ok) throw new Error('Authentication failed');
-    const data = await response.text();
-    const token = data.split('\n').find(line => line.startsWith('Auth='))?.split('=')[1];
-    if (!token) throw new Error('Auth token not found');
-    authToken = token;
-    return token;
-};
+const GREADER_API_URL = process.env.FRESHRSS_API_BASE_URL;
+const AUTH_TOKEN = process.env.FRESHRSS_AUTH_TOKEN;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') {
         return res.status(405).json({ message: 'Method Not Allowed' });
+    }
+
+    if (!GREADER_API_URL || !AUTH_TOKEN) {
+        return res.status(500).json({ message: 'Server configuration error: Missing FreshRSS environment variables.' });
     }
 
     const { articleId, action, isAdding, tagsToAdd, tagsToRemove } = req.body;
@@ -34,12 +19,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const token = await getAuthToken();
         const apiPath = `${GREADER_API_URL}/reader/api/0/edit-tag`;
         
         const params = new URLSearchParams();
         params.append('i', String(articleId)); // 'i' is the item ID parameter for GReader API
-        params.append('T', token);
+        params.append('T', AUTH_TOKEN); // Pass the token as a parameter
 
         if (action) { // Handle star/read
             const tagMap = {
@@ -47,13 +31,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 read: 'user/-/state/com.google/read',
             };
             const tag = tagMap[action as 'star' | 'read'];
-            params.append(isAdding ? 'a' : 'r', tag);
+            if(tag) {
+               params.append(isAdding ? 'a' : 'r', tag);
+            }
         }
 
-        if (tagsToAdd && tagsToAdd.length > 0) {
+        if (tagsToAdd && Array.isArray(tagsToAdd) && tagsToAdd.length > 0) {
             tagsToAdd.forEach((tag: string) => params.append('a', tag));
         }
-        if (tagsToRemove && tagsToRemove.length > 0) {
+        if (tagsToRemove && Array.isArray(tagsToRemove) && tagsToRemove.length > 0) {
             tagsToRemove.forEach((tag: string) => params.append('r', tag));
         }
 
@@ -63,8 +49,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             body: params,
         });
 
-        if (!response.ok || (await response.text()) !== 'OK') {
-             throw new Error(`Failed to update state. Status: ${response.status}`);
+        const responseText = await response.text();
+        if (!response.ok || responseText !== 'OK') {
+             throw new Error(`Failed to update state. Status: ${response.status}. Response: ${responseText}`);
         }
 
         res.status(200).json({ success: true });

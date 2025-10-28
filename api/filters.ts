@@ -1,59 +1,27 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const GREADER_API_URL = process.env.FRESHRSS_API_URL;
-const FRESHRSS_USER = process.env.FRESHRSS_USER;
-const FRESHRSS_PASS = process.env.FRESHRSS_PASS;
-
-let authToken: string | null = null;
-
-const getAuthToken = async (): Promise<string> => {
-    if (authToken) {
-        return authToken;
-    }
-
-    if (!GREADER_API_URL || !FRESHRSS_USER || !FRESHRSS_PASS) {
-        throw new Error('Missing FreshRSS environment variables');
-    }
-
-    const params = new URLSearchParams();
-    params.append('Email', FRESHRSS_USER);
-    params.append('Passwd', FRESHRSS_PASS);
-
-    const response = await fetch(`${GREADER_API_URL}/accounts/ClientLogin`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params,
-    });
-
-    if (!response.ok) {
-        throw new Error('Authentication failed');
-    }
-
-    const data = await response.text();
-    const authLine = data.split('\n').find(line => line.startsWith('Auth='));
-    if (!authLine) {
-        throw new Error('Auth token not found in response');
-    }
-
-    const token = authLine.split('=')[1];
-    authToken = token;
-    return token;
-};
+const GREADER_API_URL = process.env.FRESHRSS_API_BASE_URL;
+const AUTH_TOKEN = process.env.FRESHRSS_AUTH_TOKEN;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    if (!GREADER_API_URL || !AUTH_TOKEN) {
+        return res.status(500).json({ message: 'Server configuration error: Missing FreshRSS environment variables.' });
+    }
+
     try {
-        const token = await getAuthToken();
         const response = await fetch(`${GREADER_API_URL}/reader/api/0/tag/list?output=json`, {
             method: 'GET',
             headers: {
-                'Authorization': `GoogleLogin auth=${token}`,
+                'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,
             },
         });
 
         if (!response.ok) {
-            throw new Error('Failed to fetch tags and categories');
+            // Log the error for debugging on Vercel
+            console.error(`FreshRSS API responded with status: ${response.status}`);
+            const errorBody = await response.text();
+            console.error(`FreshRSS API error body: ${errorBody}`);
+            throw new Error(`Failed to fetch tags and categories. Status: ${response.status}`);
         }
 
         const data = await response.json();
@@ -61,14 +29,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const categories: string[] = [];
         const tags: string[] = [];
 
-        data.tags.forEach((item: { id: string; type: string }) => {
-            const label = decodeURIComponent(item.id.split('/').pop() || '');
-            if (item.type === 'folder') {
-                categories.push(label);
-            } else if (item.type === 'tag' && !item.id.includes('/state/com.google/')) {
-                tags.push(label);
-            }
-        });
+        if (data.tags) {
+            data.tags.forEach((item: { id: string; type: string }) => {
+                const label = decodeURIComponent(item.id.split('/').pop() || '');
+                if (item.type === 'folder') {
+                    categories.push(label);
+                } else if (item.type === 'tag' && !item.id.includes('/state/com.google/')) {
+                    tags.push(label);
+                }
+            });
+        }
         
         res.status(200).json({
             categories: categories.sort(),
