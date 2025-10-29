@@ -46,6 +46,10 @@ function mapFreshItemToArticle(item: any) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    console.log('Checking for environment variables in /api/starred...');
+    console.log(`FRESHRSS_API_URL is set: ${!!process.env.FRESHRSS_API_URL}`);
+    console.log(`FRESHRSS_AUTH_TOKEN is set: ${!!process.env.FRESHRSS_AUTH_TOKEN}`);
+
     if (!GREADER_API_URL || !AUTH_TOKEN) {
         return res.status(500).json({ message: 'Server configuration error: Missing FreshRSS environment variables.' });
     }
