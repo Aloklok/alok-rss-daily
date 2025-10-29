@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
-import type { Browser } from 'puppeteer-core';
+import type { Browser, HTTPRequest, LaunchOptions } from 'puppeteer-core';
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000) {
     const controller = new AbortController();
@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!fetchRes.ok) throw new Error(`Failed to fetch URL with status ${fetchRes.status}`);
 
         const html = await fetchRes.text();
-        let docForReadability = new JSDOM(html, { url: String(url) }).window.document;
+        const docForReadability = new JSDOM(html, { url: String(url) }).window.document;
         const reader = new Readability(docForReadability, { charThreshold: 100 });
         const article = reader.parse();
 
@@ -60,11 +60,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             let browser: Browser | null = null;
             try {
                 console.log('Attempting headless render...');
-                let puppeteer, launchOptions;
+                let puppeteer;
+                let launchOptions: LaunchOptions;
 
-                // [最终解决方案] 判断环境
                 if (process.env.VERCEL_ENV) {
-                    // --- 生产环境 (Vercel) ---
                     console.log('Using @sparticuz/chromium for production');
                     const chromium = (await import('@sparticuz/chromium')).default;
                     puppeteer = (await import('puppeteer-core')).default;
@@ -72,15 +71,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     launchOptions = {
                         executablePath: await chromium.executablePath(),
                         args: chromium.args,
-                        headless: "new", // [API 修正] 使用 "new"
-                        defaultViewport: chromium.defaultViewport,
+                        // [最终修正] 使用 as any 绕过旧的类型定义
+                        headless: "new" as any,
+                        defaultViewport: { width: 1280, height: 720 },
                     };
                 } else {
-                    // --- 本地开发环境 ---
                     console.log('Using local puppeteer for development');
                     puppeteer = (await import('puppeteer')).default;
                     launchOptions = {
-                        headless: "new",
+                        // [最终修正] 使用 as any 绕过旧的类型定义
+                        headless: "new" as any,
                         args: ['--no-sandbox', '--disable-setuid-sandbox']
                     };
                 }
@@ -88,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 browser = await puppeteer.launch(launchOptions);
                 const page = await browser.newPage();
                 await page.setRequestInterception(true);
-                page.on('request', req => {
+                page.on('request', (req: HTTPRequest) => {
                     if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
                         req.abort();
                     } else {
@@ -116,9 +116,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 if (browser) await browser.close();
             }
         }
-
-        console.log('Trying fallback content selectors...');
-        // ... (备用选择器逻辑，如果需要可以保留)
 
         throw new Error('Could not extract meaningful content from the article');
     } catch (error: any) {
