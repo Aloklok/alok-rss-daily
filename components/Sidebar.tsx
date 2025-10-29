@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Article } from '../types';
+import { getStarredArticles } from '../services/api';
 import { Filter, AvailableFilters } from '../types';
 
 interface SidebarProps {
@@ -10,6 +12,8 @@ interface SidebarProps {
     availableFilters: AvailableFilters;
     activeFilter: Filter | null;
     onFilterChange: (filter: Filter) => void;
+    onOpenArticle?: (article: Article) => void;
+    onRefresh?: () => Promise<void>;
 }
 
 type ActiveTab = 'filters' | 'calendar';
@@ -30,8 +34,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     availableFilters,
     activeFilter,
     onFilterChange,
+    onOpenArticle,
+    onRefresh,
 }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>('filters');
+    const [starredExpanded, setStarredExpanded] = useState<boolean>(false);
+    const [starredArticles, setStarredArticles] = useState<Article[]>([]);
+    const [isLoadingStarred, setIsLoadingStarred] = useState<boolean>(false);
+    const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
     const isFilterActive = (type: Filter['type'], value: string) => {
         return activeFilter?.type === type && activeFilter?.value === value;
@@ -56,16 +66,96 @@ const Sidebar: React.FC<SidebarProps> = ({
             isActive ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'
         }`;
     
+    useEffect(() => {
+        let mounted = true;
+        const load = async () => {
+            setIsLoadingStarred(true);
+            try {
+                const data = await getStarredArticles();
+                if (mounted) setStarredArticles(data as Article[]);
+            } catch (e) {
+                console.error('Failed to load starred articles in sidebar', e);
+            } finally {
+                if (mounted) setIsLoadingStarred(false);
+            }
+        };
+        load();
+        return () => { mounted = false; };
+    }, []);
+
+    const handleRefreshClick = async () => {
+        if (!onRefresh) return;
+        setIsRefreshing(true);
+        try {
+            // Ask parent to refresh filters/dates
+            await onRefresh();
+
+            // If starred panel is collapsed, refresh starred list here; otherwise skip per requirement
+            if (!starredExpanded) {
+                setIsLoadingStarred(true);
+                try {
+                    const data = await getStarredArticles();
+                    setStarredArticles(data as Article[]);
+                } catch (e) {
+                    console.error('Failed to refresh starred articles on refresh click', e);
+                } finally {
+                    setIsLoadingStarred(false);
+                }
+            }
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     const renderFiltersTab = () => (
         <div className="space-y-4">
              <nav className="flex flex-col gap-1.5">
-                <button
-                    onClick={() => onFilterChange({ type: 'starred', value: 'true' })}
-                    className={listItemButtonClass(isFilterActive('starred', 'true'))}
-                >
-                    <span>⭐</span>
-                    <span>我的收藏</span>
-                </button>
+                <div>
+                    <button
+                        onClick={() => {
+                            // toggle expand only; do NOT change active filter to avoid triggering
+                            // a full refresh/fetch which shows the global loading spinner.
+                            setStarredExpanded(s => !s);
+                        }}
+                        className={listItemButtonClass(isFilterActive('starred', 'true'))}
+                    >
+                        <span>⭐</span>
+                        <span className="flex-1">我的收藏</span>
+                        <svg className={`h-4 w-4 transition-transform ${starredExpanded ? 'rotate-90' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+
+                    {starredExpanded && (
+                        <div className="mt-2 ml-2 border-l pl-3 space-y-1">
+                            {isLoadingStarred ? (
+                                <div className="space-y-2">
+                                    {[...Array(3)].map((_, i) => <div key={i} className="h-8 bg-gray-200 rounded animate-pulse"></div>)}
+                                </div>
+                            ) : (
+                                starredArticles.length === 0 ? (
+                                    <div className="text-sm text-gray-500">暂无收藏</div>
+                                ) : (
+                                    starredArticles.map(article => (
+                                        <button
+                                            key={article.id}
+                                            onClick={() => {
+                                                if (onOpenArticle) {
+                                                    onOpenArticle(article);
+                                                } else {
+                                                    onFilterChange({ type: 'starred', value: 'true' });
+                                                }
+                                            }}
+                                            className="w-full text-left text-sm text-gray-700 hover:bg-gray-100 px-2 py-1 rounded"
+                                        >
+                                            {article.title}
+                                        </button>
+                                    ))
+                                )
+                            )}
+                        </div>
+                    )}
+                </div>
             </nav>
 
             <div>
@@ -170,6 +260,27 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <span>📅</span>
                         <span>日历</span>
                     </div>
+                </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+                <div />
+                <button
+                    onClick={handleRefreshClick}
+                    disabled={isRefreshing}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-md text-sm text-gray-700 hover:bg-gray-200 focus:outline-none"
+                >
+                    {isRefreshing ? (
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                    ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M4 4v5h.582A7 7 0 1011 18.418V17a1 1 0 112 0v3a1 1 0 01-1 1H6a1 1 0 01-1-1V17a1 1 0 112 0v1.418A7 7 0 104.582 9H4z" />
+                        </svg>
+                    )}
+                    <span>{isRefreshing ? '正在更新' : '更新目录'}</span>
                 </button>
             </div>
 

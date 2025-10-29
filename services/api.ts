@@ -133,9 +133,13 @@ export const markAllAsRead = async (): Promise<void> => {
 export const getCleanArticleContent = async (article: Article): Promise<CleanArticleContent> => {
     await sleep(800);
     try {
-        const response = await fetch(`/api/readability?url=${encodeURIComponent(article.link)}`);
+        const readabilityUrl = `/api/readability?url=${encodeURIComponent(article.link)}`;
+        console.log('Fetching article content from:', readabilityUrl);
+        const response = await fetch(readabilityUrl);
         if (!response.ok) {
-            throw new Error('Failed to fetch readable content from backend');
+            const errorText = await response.text();
+            console.error('Readability API error:', response.status, errorText);
+            throw new Error(`Failed to fetch readable content from backend: ${response.status} ${errorText}`);
         }
         return await response.json();
     } catch(e) {
@@ -238,7 +242,7 @@ export const getArticlesByTag = async (tag: string): Promise<Article[]> => {
 
 export const getStarredArticles = async (): Promise<Article[]> => {
     try {
-        const response = await fetch(`/api/articles?type=starred`);
+        const response = await fetch(`/api/starred`);
         if (!response.ok) {
             throw new Error(`API request failed with status ${response.status}`);
         }

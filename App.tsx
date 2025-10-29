@@ -5,6 +5,7 @@ import ReaderView from './components/ReaderView';
 import { BriefingReport, Article, CleanArticleContent, Filter, AvailableFilters } from './types';
 import { getAvailableDates, getBriefingReportsByDate, markAllAsRead, getCleanArticleContent, getArticleStates, editArticleState, editArticleTag, getAvailableFilters, getArticlesByCategory, getArticlesByTag, getStarredArticles } from './services/api';
 import ArticlePreviewModal from './components/ArticlePreviewModal';
+import ArticleDetail from './components/ArticleDetail';
 
 const LoadingSpinner: React.FC = () => (
     <div className="flex items-center justify-center h-full w-full">
@@ -30,6 +31,7 @@ const App: React.FC = () => {
     const [isReaderVisible, setIsReaderVisible] = useState(false);
 
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [sidebarArticle, setSidebarArticle] = useState<Article | null>(null);
 
     const mainContentRef = useRef<HTMLDivElement | null>(null);
 
@@ -115,6 +117,17 @@ const App: React.FC = () => {
         };
         fetchInitialData();
     }, [fetchData]);
+
+    const refreshSidebar = async () => {
+        try {
+            const [availableDatesNew, filtersNew] = await Promise.all([getAvailableDates(), getAvailableFilters()]);
+            const sortedDates = availableDatesNew.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+            setDates(sortedDates);
+            setAvailableFilters(filtersNew);
+        } catch (error) {
+            console.error('Failed to refresh sidebar data', error);
+        }
+    };
 
     const availableMonths = useMemo(() => {
         if (dates.length === 0) return [];
@@ -220,6 +233,13 @@ const App: React.FC = () => {
         }
     }, []);
 
+    const handleShowArticleInMain = useCallback((article: Article) => {
+        // Clear any ReaderView modal usage and show article inline
+        setIsReaderVisible(false);
+        setSidebarArticle(article);
+        // keep readerContent empty - ArticleDetail will fetch on its own
+    }, []);
+
     const handlePreviewArticle = (url: string) => {
         setPreviewUrl(url);
     };
@@ -235,10 +255,14 @@ const App: React.FC = () => {
                 availableFilters={availableFilters}
                 activeFilter={activeFilter}
                 onFilterChange={handleFilterChange}
+                onOpenArticle={handleShowArticleInMain}
+                onRefresh={refreshSidebar}
             />
             <div ref={mainContentRef} className="flex-1 overflow-y-auto relative bg-stone-50">
                 {isLoading ? (
                     <LoadingSpinner />
+                ) : sidebarArticle ? (
+                    <ArticleDetail article={sidebarArticle} onClose={() => setSidebarArticle(null)} />
                 ) : (
                     <Briefing 
                         reports={reports} 

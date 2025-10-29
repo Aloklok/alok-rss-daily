@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { CleanArticleContent } from '../types';
 
 interface ArticlePreviewModalProps {
     url: string | null;
@@ -6,6 +7,9 @@ interface ArticlePreviewModalProps {
 }
 
 const ArticlePreviewModal: React.FC<ArticlePreviewModalProps> = ({ url, onClose }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [content, setContent] = useState<CleanArticleContent | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -21,6 +25,37 @@ const ArticlePreviewModal: React.FC<ArticlePreviewModalProps> = ({ url, onClose 
         };
     }, [url, onClose]);
 
+    useEffect(() => {
+        let mounted = true;
+        if (!url) {
+            setContent(null);
+            setError(null);
+            return;
+        }
+
+        const load = async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const resp = await fetch(`/api/readability?url=${encodeURIComponent(url)}`);
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    throw new Error(`Readability API failed: ${resp.status} ${text}`);
+                }
+                const data = await resp.json();
+                if (mounted) setContent(data as CleanArticleContent);
+            } catch (err: any) {
+                console.error('Failed to load readability content', err);
+                if (mounted) setError(err.message || 'Failed to load article');
+            } finally {
+                if (mounted) setIsLoading(false);
+            }
+        };
+
+        load();
+        return () => { mounted = false; };
+    }, [url]);
+
     if (!url) return null;
 
     return (
@@ -29,7 +64,7 @@ const ArticlePreviewModal: React.FC<ArticlePreviewModalProps> = ({ url, onClose 
             onClick={onClose}
         >
             <div 
-                className="bg-white rounded-lg shadow-2xl w-full h-full max-w-6xl flex flex-col"
+                className="bg-white rounded-lg shadow-2xl w-full h-full max-w-6xl flex flex-col overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between p-3 border-b bg-gray-50 rounded-t-lg">
@@ -54,12 +89,33 @@ const ArticlePreviewModal: React.FC<ArticlePreviewModalProps> = ({ url, onClose 
                         </button>
                     </div>
                 </div>
-                <iframe 
-                    src={url} 
-                    title="Article Preview"
-                    className="w-full flex-grow border-0"
-                    sandbox="allow-scripts allow-same-origin"
-                />
+
+                <div className="flex-grow overflow-y-auto">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center h-full w-full p-8">
+                            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+                        </div>
+                    ) : error ? (
+                        <div className="p-6 text-center text-red-600">
+                            <p>无法加载阅读模式内容。</p>
+                            <pre className="text-xs mt-2 text-left whitespace-pre-wrap">{error}</pre>
+                            <div className="mt-4">
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600">在新标签页打开原文</a>
+                            </div>
+                        </div>
+                    ) : content ? (
+                        <article className="p-6 md:p-8">
+                            <h1 className="text-2xl md:text-3xl font-bold font-serif text-gray-900 mb-2">{content.title}</h1>
+                            <p className="text-gray-500 mb-6 border-b pb-4">来源: {content.source}</p>
+                            <div 
+                                className="prose prose-lg max-w-none text-gray-800 leading-relaxed"
+                                dangerouslySetInnerHTML={{ __html: content.content }}
+                            />
+                        </article>
+                    ) : (
+                        <div className="p-6 text-center text-gray-500">无法获得文章内容</div>
+                    )}
+                </div>
             </div>
         </div>
     );
