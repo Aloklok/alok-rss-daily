@@ -20,23 +20,24 @@ function mapFreshItemToArticle(item: any) {
     const link = item.alternate?.[0]?.href || item.canonical?.[0]?.href || '';
     const title = item.title || '';
     const sourceName = item.origin?.title || (item.canonical?.[0]?.title || '');
-    const published = item.published ? toIsoTimestamp(item.published) : toIsoTimestamp(item.updated || item.crawled);
-    const created_at = toIsoTimestamp(item.crawled || item.published || item.updated);
     const categories: string[] = Array.isArray(item.categories) ? item.categories : [];
-    const summary = item.summary?.content || item.content?.content || '';
 
+    // Return a minimal article object to reduce payload size for the starred list.
+    // The full content will be fetched when the user clicks on an article.
+    // The summary is intentionally omitted as it's the largest piece of data.
     return {
         id,
-        created_at,
         title,
         link,
         sourceName,
-        published,
+        // --- Provide default values to match the Article type ---
+        created_at: new Date().toISOString(),
+        published: new Date().toISOString(),
         category: '',
         briefingSection: '',
         keywords: [],
         verdict: { type: '', score: 0 },
-        summary: summary || '',
+        summary: '', // Keep the property but leave it empty
         tldr: '',
         highlights: '',
         critiques: '',

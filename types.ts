@@ -20,7 +20,7 @@ export interface Article {
   briefingSection: string;
   keywords: string[];
   verdict: Verdict;
-  summary: string;
+  summary?: string;
   tldr: string;
   highlights: string; // Technical Insight
   critiques: string; // Worth Noting
