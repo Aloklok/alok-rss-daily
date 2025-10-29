@@ -4,7 +4,11 @@ import { getStarredArticles } from '../services/api';
 import { Filter, AvailableFilters } from '../types';
 
 interface SidebarProps {
+    dates: string[];
     isLoading: boolean;
+    availableMonths: string[];
+    selectedMonth: string;
+    onMonthChange: (month: string) => void;
     availableFilters: AvailableFilters;
     activeFilter: Filter | null;
     onFilterChange: (filter: Filter) => void;
@@ -14,8 +18,19 @@ interface SidebarProps {
 
 type ActiveTab = 'filters' | 'calendar';
 
+const formatMonthForDisplay = (month: string) => {
+    if (!month) return '';
+    const [year, monthNum] = month.split('-');
+    const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+    return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' });
+};
+
 const Sidebar: React.FC<SidebarProps> = ({
+    dates,
     isLoading,
+    availableMonths,
+    selectedMonth,
+    onMonthChange,
     availableFilters,
     activeFilter,
     onFilterChange,
@@ -29,6 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
     const isFilterActive = (type: Filter['type'], value: string) => {
+       
         return activeFilter?.type === type && activeFilter?.value === value;
     };
 
@@ -178,14 +194,56 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const renderCalendarTab = () => (
         <div className="flex flex-col h-full">
-            <nav className="flex flex-col gap-1.5 flex-grow">
-                <button
-                    onClick={() => onFilterChange({ type: 'date', value: 'today' })}
-                    className={listItemButtonClass(isFilterActive('date', 'today'))}
-                >
-                    <span>今日简报</span>
-                </button>
-            </nav>
+            {isLoading ? (
+                <div className="space-y-2">
+                    {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-200 rounded-lg animate-pulse"></div>)}
+                </div>
+            ) : (
+              <nav className="flex flex-col gap-1.5 flex-grow">
+                {dates.map(date => {
+                    const isActive = isFilterActive('date', date);
+                    const dateObj = new Date(date);
+                    const displayDatePart = dateObj.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+                    const displayDayOfWeekPart = dateObj.toLocaleDateString('zh-CN', { weekday: 'short' });
+
+                    return (
+                      <button
+                        key={date}
+                        onClick={() => onFilterChange({ type: 'date', value: date })}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors duration-200 flex justify-between items-center ${
+                            isActive
+                                ? 'bg-gray-800 text-white font-semibold'
+                                : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span>{displayDatePart}</span>
+                        <span className="text-xs">{displayDayOfWeekPart}</span>
+                      </button>
+                    );
+                })}
+              </nav>
+            )}
+            <div className="mt-auto pt-4">
+              <div className="relative">
+                  <select
+                      value={selectedMonth}
+                      onChange={e => onMonthChange(e.target.value)}
+                      className="w-full appearance-none bg-transparent border-none text-gray-800 py-2 pl-3 pr-8 rounded-md focus:outline-none cursor-pointer absolute inset-0 z-10 opacity-0"
+                  >
+                      {availableMonths.map(month => (
+                          <option key={month} value={month}>
+                              {formatMonthForDisplay(month)}
+                          </option>
+                      ))}
+                  </select>
+                  <div className="w-full flex items-center justify-between bg-gray-100 border border-gray-300 text-gray-800 py-2 px-3 rounded-md pointer-events-none">
+                      <span>{formatMonthForDisplay(selectedMonth)}</span>
+                      <svg className="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                  </div>
+              </div>
+            </div>
         </div>
     );
 

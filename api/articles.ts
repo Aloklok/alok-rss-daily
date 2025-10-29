@@ -16,16 +16,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const { id } = req.body;
-
-    if (!id || typeof id !== 'string') {
+    if (id === undefined || id === null) {
         return res.status(400).json({ message: 'Article ID is required.' });
     }
+    const idStr = String(id);
 
     try {
-        const url = `${GREADER_API_URL}/greader.php/reader/api/0/stream/items/contents?output=json`;
-        const body = new URLSearchParams({ i: id }).toString();
+        const primaryUrl = `${GREADER_API_URL}/greader.php/reader/api/0/stream/items/contents?output=json`;
+        const body = new URLSearchParams({ i: idStr }).toString();
 
-        const response = await fetch(url, {
+        console.log('[api/articles] Fetching FreshRSS content via', primaryUrl, 'body:', body);
+        const response = await fetch(primaryUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,

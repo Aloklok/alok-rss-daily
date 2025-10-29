@@ -3,8 +3,8 @@ import Sidebar from './components/Sidebar';
 import Briefing from './components/Briefing';
 import ReaderView from './components/ReaderView';
 import { BriefingReport, Article, CleanArticleContent, Filter, AvailableFilters } from './types';
-import { getBriefingReportsByDate, markAllAsRead, getCleanArticleContent, getArticleStates, editArticleState, editArticleTag, getAvailableFilters, getArticlesByLabel, getStarredArticles } from './services/api';
-import ArticlePreviewModal from './components/ArticlePreviewModal';
+import { getAvailableDates, getBriefingReportsByDate, markAllAsRead, getCleanArticleContent, getArticleStates, editArticleState, editArticleTag, getAvailableFilters, getArticlesByLabel, getStarredArticles, getTodayInShanghai } from './services/api';
+// import ArticlePreviewModal from './components/ArticlePreviewModal';
 import ArticleDetail from './components/ArticleDetail';
 import ArticleList from './components/ArticleList'; // Import the new ArticleList component
 
@@ -19,11 +19,13 @@ const App: React.FC = () => {
     const [filteredArticles, setFilteredArticles] = useState<Article[]>([]); // New state for category/tag articles
     const [isLoading, setIsLoading] = useState(true);
     
-    // Removed dates, selectedMonth, availableMonths, datesForMonth states and related useMemos
+    const [dates, setDates] = useState<string[]>([]); // Re-introduced
     const [activeFilter, setActiveFilter] = useState<Filter | null>(null);
     const [availableFilters, setAvailableFilters] = useState<AvailableFilters>({ categories: [], tags: [] });
+    const [selectedMonth, setSelectedMonth] = useState<string>(''); // Re-introduced
 
     const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
+    const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
     
     const [isMarkingAsRead, setIsMarkingAsRead] = useState(false);
     
@@ -31,12 +33,12 @@ const App: React.FC = () => {
     const [isReaderLoading, setIsReaderLoading] = useState(false);
     const [isReaderVisible, setIsReaderVisible] = useState(false);
 
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    // const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [sidebarArticle, setSidebarArticle] = useState<Article | null>(null);
 
     const mainContentRef = useRef<HTMLDivElement | null>(null);
 
-    const fetchData = useCallback(async (filter: Filter) => {
+    const fetchData = useCallback(async (filter: Filter, slotOverride?: 'morning' | 'afternoon' | 'evening' | null) => {
         if (!filter) return;
         setIsLoading(true);
         setSidebarArticle(null); // Clear any inline article view
@@ -46,8 +48,8 @@ const App: React.FC = () => {
             setReports([]); // Clear reports to ensure Briefing re-fetches if needed
             setSelectedReportId(null);
             try {
-                // getBriefingReportsByDate now fetches all articles, no date parameter needed
-                const fetchedReports = await getBriefingReportsByDate();
+                // Fetch with optional time slot override for immediate state updates
+                const fetchedReports = await getBriefingReportsByDate(filter.value, slotOverride || undefined);
                 const articles = fetchedReports.flatMap(report => report.articles);
                 const articleIds = articles.map(article => article.id);
 
@@ -70,7 +72,8 @@ const App: React.FC = () => {
             } catch (error) {
                 console.error(`Failed to fetch data for date filter`, error);
                 setReports([]);
-            } finally {
+            }
+            finally {
                 setIsLoading(false);
             }
         } else if (filter.type === 'category' || filter.type === 'tag') {
@@ -92,7 +95,8 @@ const App: React.FC = () => {
             } catch (error) {
                 console.error(`Failed to fetch data for ${filter.type} filter`, error);
                 setFilteredArticles([]);
-            } finally {
+            }
+            finally {
                 setIsLoading(false);
             }
         } else if (filter.type === 'starred') {
@@ -108,13 +112,42 @@ const App: React.FC = () => {
         const fetchInitialData = async () => {
             setIsLoading(true);
             try {
-                const filters = await getAvailableFilters();
+                const [availableDates, filters] = await Promise.all([
+                    getAvailableDates(), // Re-introduced
+                    getAvailableFilters()
+                ]);
+
+                const sortedDates = availableDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+                setDates(sortedDates);
                 setAvailableFilters(filters);
                 
-                // Set initial filter to 'date' to show all articles as "Today's Briefing"
-                const initialFilter = { type: 'date' as const, value: 'today' };
-                setActiveFilter(initialFilter);
-                fetchData(initialFilter);
+                if (sortedDates.length > 0) {
+                    const latestDate = sortedDates[0];
+                    const initialFilter = { type: 'date' as const, value: latestDate };
+                    setActiveFilter(initialFilter);
+                    setSelectedMonth(latestDate.substring(0, 7)); // Correctly extract YYYY-MM
+                    // Initial fetch for date filter with auto slot if today
+                    const today = getTodayInShanghai();
+                    if (today && latestDate === today) {
+                        const shanghaiHour = new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Shanghai' })
+                            .formatToParts(new Date())
+                            .find(p => p.type === 'hour')?.value;
+                        const hourNum = shanghaiHour ? parseInt(shanghaiHour, 10) : new Date().getHours();
+                        let autoSlot: 'morning' | 'afternoon' | 'evening' | null = null;
+                        if (hourNum >= 0 && hourNum <= 11) autoSlot = 'morning';
+                        else if (hourNum >= 12 && hourNum <= 17) autoSlot = 'afternoon';
+                        else autoSlot = 'evening';
+                        setTimeSlot(autoSlot);
+                        fetchData(initialFilter, autoSlot);
+                    } else {
+                        setTimeSlot(null);
+                        fetchData(initialFilter, null);
+                    }
+                } else {
+                    // If no dates, set activeFilter to null, main content will show prompt
+                    setActiveFilter(null);
+                    setIsLoading(false);
+                }
             } catch (error) {
                 console.error("Failed to fetch initial data", error);
                 setIsLoading(false);
@@ -125,28 +158,72 @@ const App: React.FC = () => {
 
     const refreshSidebar = async () => {
         try {
-            const filtersNew = await getAvailableFilters();
+            const [availableDatesNew, filtersNew] = await Promise.all([
+                getAvailableDates(), // Re-introduced
+                getAvailableFilters()
+            ]);
+            const sortedDates = availableDatesNew.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+            setDates(sortedDates);
             setAvailableFilters(filtersNew);
             // Re-fetch current active filter data if it's not starred
             if (activeFilter && activeFilter.type !== 'starred') {
-                fetchData(activeFilter);
+                fetchData(activeFilter, timeSlot);
             }
         } catch (error) {
             console.error('Failed to refresh sidebar data', error);
         }
     };
 
-    // Removed availableMonths and datesForMonth useMemos
+    const availableMonths = useMemo(() => {
+        if (dates.length === 0) return [];
+        const monthSet = new Set<string>();
+        dates.forEach(date => {
+            // date is in YYYY-MM-DD format, extract YYYY-MM
+            monthSet.add(date.substring(0, 7));
+        });
+        return Array.from(monthSet).sort((a, b) => b.localeCompare(a));
+    }, [dates]);
+
+    const datesForMonth = useMemo(() => {
+        if (!selectedMonth) return [];
+        // Filter dates based on selectedMonth (YYYY-MM)
+        return dates.filter(date => date.startsWith(selectedMonth));
+    }, [dates, selectedMonth]);
 
     const handleFilterChange = (filter: Filter) => {
         setActiveFilter(filter);
+        if (filter.type === 'date') {
+            const today = getTodayInShanghai();
+            if (today && filter.value === today) {
+                const shanghaiHour = new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Shanghai' })
+                    .formatToParts(new Date())
+                    .find(p => p.type === 'hour')?.value;
+                const hourNum = shanghaiHour ? parseInt(shanghaiHour, 10) : new Date().getHours();
+                let autoSlot: 'morning' | 'afternoon' | 'evening' | null = null;
+                if (hourNum >= 0 && hourNum <= 11) autoSlot = 'morning';
+                else if (hourNum >= 12 && hourNum <= 17) autoSlot = 'afternoon';
+                else autoSlot = 'evening'; // 18-23
+                setTimeSlot(autoSlot);
+                fetchData(filter, autoSlot);
+                return;
+            } else {
+                setTimeSlot(null);
+                fetchData(filter, null);
+                return;
+            }
+        }
         fetchData(filter);
     };
 
     const handleResetFilter = () => {
         // Reset to the default "Today's Briefing" view
-        const resetFilter = { type: 'date' as const, value: 'today' };
+        const today = getTodayInShanghai(); // Use timezone-aware today
+        if (!today) return; // Handle case where today cannot be determined
+
+        const resetFilter = { type: 'date' as const, value: today };
         handleFilterChange(resetFilter);
+        setSelectedMonth(today.substring(0, 7)); // YYYY-MM format
+        setTimeSlot(null);
     };
     
     const handleArticleStateChange = async (articleId: string | number, newTags: string[]) => {
@@ -231,7 +308,8 @@ const App: React.FC = () => {
             setReaderContent(content);
         } catch (error) {
             console.error("Failed to fetch clean article content", error);
-        } finally {
+        }
+        finally {
             setIsReaderLoading(false);
         }
     }, []);
@@ -243,15 +321,18 @@ const App: React.FC = () => {
         // keep readerContent empty - ArticleDetail will fetch on its own
     }, []);
 
-    const handlePreviewArticle = (url: string) => {
-        setPreviewUrl(url);
-    };
+    // const handlePreviewArticle = (url: string) => {
+    //     setPreviewUrl(url);
+    // };
 
     return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
             <Sidebar 
-                // Removed date-related props
+                dates={datesForMonth} // Re-introduced
                 isLoading={isLoading}
+                availableMonths={availableMonths} // Re-introduced
+                selectedMonth={selectedMonth} // Re-introduced
+                onMonthChange={setSelectedMonth} // Re-introduced
                 availableFilters={availableFilters}
                 activeFilter={activeFilter}
                 onFilterChange={handleFilterChange}
@@ -267,12 +348,18 @@ const App: React.FC = () => {
                     <Briefing 
                         reports={reports} 
                         activeFilter={activeFilter}
+                        timeSlot={timeSlot}
                         selectedReportId={selectedReportId}
                         onReportSelect={setSelectedReportId}
                         onReaderModeRequest={handleOpenReader}
-                        onPreviewArticle={handlePreviewArticle}
                         onStateChange={handleArticleStateChange}
                         onResetFilter={handleResetFilter}
+                        onTimeSlotChange={(slot) => {
+                            setTimeSlot(slot);
+                            if (activeFilter && activeFilter.type === 'date') {
+                                fetchData(activeFilter, slot);
+                            }
+                        }}
                     />
                 ) : (activeFilter?.type === 'category' || activeFilter?.type === 'tag') ? (
                     <ArticleList
@@ -321,10 +408,7 @@ const App: React.FC = () => {
                     content={readerContent}
                     onClose={() => setIsReaderVisible(false)}
                 />
-                <ArticlePreviewModal 
-                    url={previewUrl}
-                    onClose={() => setPreviewUrl(null)}
-                />
+                {/* ArticlePreviewModal removed as per requirement */}
             </div>
         </div>
     );

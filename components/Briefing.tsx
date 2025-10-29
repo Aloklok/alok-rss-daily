@@ -2,11 +2,24 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Article, BriefingReport, Tag, Filter } from '../types';
 import { editArticleState, getTags, editArticleTag } from '../services/api';
 
-const parseBold = (text: string) => {
+const parseBold = (text: string, emphasisClass: string = 'font-semibold text-current') => {
   if (!text) return '';
   const parts = text.split(/\*\*(.*?)\*\*/g);
   return parts.map((part, i) =>
-    i % 2 === 1 ? <strong key={i} className="font-semibold text-current">{part}</strong> : part
+    i % 2 === 1 ? (
+      <strong
+        key={i}
+        className={emphasisClass}
+        style={{
+          fontFamily:
+            "'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC', 'Helvetica Neue', Arial, sans-serif"
+        }}
+      >
+        {part}
+      </strong>
+    ) : (
+      part
+    )
   );
 };
 
@@ -19,10 +32,10 @@ const CALLOUT_THEMES = {
 
 
 const calloutCardClasses = {
-    fuchsia: { bg: 'bg-fuchsia-400/30', title: 'text-fuchsia-950', body: 'text-fuchsia-900' },
-    teal: { bg: 'bg-teal-400/30', title: 'text-teal-950', body: 'text-teal-900' },
-    amber: { bg: 'bg-amber-400/30', title: 'text-amber-950', body: 'text-amber-900' },
-    sky: { bg: 'bg-sky-400/30', title: 'text-sky-950', body: 'text-sky-900' },
+    fuchsia: { bg: 'bg-fuchsia-400/30', title: 'text-fuchsia-950', body: 'text-fuchsia-900', emphasis: 'text-fuchsia-950 font-black bg-fuchsia-200/40 px-1.5 py-0.5 rounded-md' },
+    teal: { bg: 'bg-teal-400/30', title: 'text-teal-950', body: 'text-teal-900', emphasis: 'text-teal-950 font-black bg-teal-200/40 px-1.5 py-0.5 rounded-md' },
+    amber: { bg: 'bg-amber-400/30', title: 'text-amber-950', body: 'text-amber-900', emphasis: 'text-amber-950 font-black bg-amber-200/40 px-1.5 py-0.5 rounded-md' },
+    sky: { bg: 'bg-sky-400/30', title: 'text-sky-950', body: 'text-sky-900', emphasis: 'text-sky-950 font-black bg-sky-200/40 px-1.5 py-0.5 rounded-md' },
 };
 
 
@@ -47,10 +60,10 @@ const getRandomColorClass = (key: string) => {
 
 interface CalloutProps {
   title: keyof typeof CALLOUT_THEMES;
-  children: React.ReactNode;
+  content: string;
 }
 
-const Callout: React.FC<CalloutProps> = ({ title, children }) => {
+const Callout: React.FC<CalloutProps> = ({ title, content }) => {
     const theme = CALLOUT_THEMES[title];
     const colors = calloutCardClasses[theme.color];
 
@@ -61,7 +74,7 @@ const Callout: React.FC<CalloutProps> = ({ title, children }) => {
                 <h4 className={`text-lg font-bold ${colors.title}`}>{title}</h4>
             </div>
             <div className={`${colors.body} text-[15px] leading-relaxed font-medium`}>
-                {children}
+                {parseBold(content, colors.emphasis)}
             </div>
         </aside>
     );
@@ -186,10 +199,9 @@ interface ActionButtonsProps {
     article: Article;
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
-    onPreviewArticle: (url: string) => void;
 }
 
-const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequest, onStateChange, onPreviewArticle }) => {
+const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequest, onStateChange }) => {
     const STAR_TAG = 'user/-/state/com.google/starred';
     const READ_TAG = 'user/-/state/com.google/read';
 
@@ -235,13 +247,6 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
                             </svg>
                             阅读
                         </button>
-                        <button onClick={() => onPreviewArticle(article.link)} className={`${actionButtonClass} bg-stone-200 hover:bg-stone-300 text-stone-800`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            预览
-                        </button>
                         <button onClick={() => handleToggleState('star')} disabled={!!isLoading} className={`${actionButtonClass} ${isStarred ? 'bg-amber-400 text-amber-950' : 'bg-amber-200 hover:bg-amber-300 text-amber-900'}`}>
                              {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
                              {isStarred ? '已收藏' : '收藏'}
@@ -282,13 +287,6 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
                         </svg>
                         <span>阅读</span>
                     </button>
-                    <button onClick={() => onPreviewArticle(article.link)} className={`${mobileActionButtonClass} text-stone-600 bg-stone-100`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        <span>预览</span>
-                    </button>
                     <button onClick={() => handleToggleState('star')} disabled={!!isLoading} className={`${mobileActionButtonClass} ${isStarred ? 'bg-amber-300 text-amber-900' : 'bg-amber-100 text-amber-700'}`}>
                         {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
                         <span>{isStarred ? '已收藏' : '收藏'}</span>
@@ -319,10 +317,9 @@ interface ArticleCardProps {
   article: Article;
   onReaderModeRequest: (article: Article) => void;
   onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
-  onPreviewArticle: (url: string) => void;
 }
 
-const ArticleCard: React.FC<ArticleCardProps> = ({ article, onReaderModeRequest, onStateChange, onPreviewArticle }) => {
+const ArticleCard: React.FC<ArticleCardProps> = ({ article, onReaderModeRequest, onStateChange }) => {
   const publishedDate = new Date(article.published).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
   
   const allKeywords = [article.category, ...article.keywords];
@@ -363,13 +360,13 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, onReaderModeRequest,
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        <Callout title="一句话总结">{parseBold(article.summary)}</Callout>
-        <Callout title="技术洞察">{parseBold(article.highlights)}</Callout>
-        <Callout title="值得注意">{parseBold(article.critiques)}</Callout>
-        <Callout title="市场观察">{parseBold(article.marketTake)}</Callout>
+        <Callout title="一句话总结" content={article.summary} />
+        <Callout title="技术洞察" content={article.highlights} />
+        <Callout title="值得注意" content={article.critiques} />
+        <Callout title="市场观察" content={article.marketTake} />
       </div>
 
-      <ActionButtons article={article} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} onPreviewArticle={onPreviewArticle} />
+      <ActionButtons article={article} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />
     </article>
   );
 };
@@ -378,10 +375,9 @@ interface ReportContentProps {
     report: BriefingReport;
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
-    onPreviewArticle: (url: string) => void;
 }
 
-const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeRequest, onStateChange, onPreviewArticle }) => {
+const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeRequest, onStateChange }) => {
     const sectionMap = useMemo(() => {
         const map = new Map<string, Article[]>();
         report.articles.forEach(article => {
@@ -411,7 +407,7 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeReque
 
     return (
         <div>
-            <div className="bg-white/70 backdrop-blur-md p-6 rounded-2xl border border-stone-200/80 shadow-sm mb-12">
+            <div className="bg-white/70 backdrop-blur-md p-6 rounded-2xl border border-stone-200/80 shadow-sm mb-10">
                 <div className="md:hidden">
                     <h3 className="text-2xl font-bold font-serif text-stone-800 flex items-center">
                         <span>📚 目录</span>
@@ -424,7 +420,7 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeReque
                     <h3 className="text-2xl font-bold font-serif text-stone-800">📝 摘要</h3>
                 </div>
                 
-                <div className="mt-6">
+                <div className="mt-3">
                     {Array.from(sectionMap.entries()).map(([sectionTitle, articles]) => (
                         <div key={sectionTitle}>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 border-b-2 border-stone-200 my-2 pb-2">
@@ -472,7 +468,7 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeReque
             <div className="space-y-4">
                 {report.articles.map((article, index) => (
                    <div key={article.id} id={`article-${article.id}`} className="scroll-mt-24">
-                     <ArticleCard article={article} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} onPreviewArticle={onPreviewArticle} />
+                     <ArticleCard article={article} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />
                      {index < report.articles.length - 1 && <DecorativeDivider />}
                    </div>
                 ))}
@@ -485,12 +481,13 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeReque
 interface BriefingProps {
   reports: BriefingReport[];
   activeFilter: Filter | null;
+  timeSlot: 'morning' | 'afternoon' | 'evening' | null;
   selectedReportId: number | null;
   onReportSelect: (id: number) => void;
   onReaderModeRequest: (article: Article) => void;
   onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
   onResetFilter: () => void;
-  onPreviewArticle: (url: string) => void;
+  onTimeSlotChange: (slot: 'morning' | 'afternoon' | 'evening' | null) => void;
 }
 
 const GRADIENTS = [
@@ -501,19 +498,23 @@ const GRADIENTS = [
     'from-lime-400 via-emerald-500 to-cyan-500'
 ];
 
-const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, selectedReportId, onReportSelect, onReaderModeRequest, onStateChange, onResetFilter, onPreviewArticle }) => {
+const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, selectedReportId, onReportSelect, onReaderModeRequest, onStateChange, onResetFilter, onTimeSlotChange }) => {
   const selectedReport = reports.find(r => r.id === selectedReportId);
 
   const randomGradient = useMemo(() => {
     if(activeFilter?.type !== 'date') return GRADIENTS[0];
-    const dateAsNumber = new Date(activeFilter.value).getDate();
+    const dateAsNumber = new Date(activeFilter.value + 'T00:00:00').getDate();
     return GRADIENTS[dateAsNumber % GRADIENTS.length];
   }, [activeFilter]);
   
   const isToday = useMemo(() => {
     if (activeFilter?.type !== 'date') return false;
-    const today = new Date().toISOString().split('T')[0];
-    return activeFilter.value === today;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const todayLocal = `${y}-${m}-${d}`;
+    return activeFilter.value === todayLocal;
   }, [activeFilter]);
 
   const getGreeting = () => {
@@ -549,9 +550,35 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, selectedRepo
                                 )}
                             </div>
                         </div>
-                        {isToday && reports.length > 0 && <p className="text-xl text-cyan-100">{getGreeting()}，这是您的今日简报。</p>}
+                        {isToday && (
+                            <p className="mt-6 text-2xl md:text-3xl font-serif font-bold tracking-tight text-white/95">
+                                {getGreeting()}，欢迎阅读今日简报。
+                            </p>
+                        )}
                     </div>
-                    {reports.length > 0 && (
+                    {activeFilter?.type === 'date' && (
+                         <div className="mt-6 md:mt-0 flex-shrink-0 flex items-center gap-2">
+                            <div className="bg-black/10 p-1.5 rounded-full flex gap-1">
+                                {(['morning','afternoon','evening'] as const).map(slot => {
+                                    const labelMap: Record<'morning'|'afternoon'|'evening', string> = { morning: '早上', afternoon: '下午', evening: '晚上' };
+                                    const isSelected = timeSlot === slot;
+                                    return (
+                                        <button
+                                            key={slot}
+                                            onClick={() => onTimeSlotChange(isSelected ? null : slot)}
+                                            className={`px-4 sm:px-5 py-2 text-base font-semibold rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-white/50 ${
+                                                isSelected ? 'bg-white text-blue-600 shadow-md' : 'text-white/80 hover:bg-white/10'
+                                            }`}
+                                        >
+                                            {labelMap[slot]}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeFilter?.type !== 'date' && reports.length > 0 && (
                          <nav className="mt-6 md:mt-0 flex-shrink-0 bg-black/10 p-1.5 rounded-full flex gap-1">
                             {reports.map(report => {
                                 const isSelected = report.id === selectedReportId;
@@ -614,7 +641,6 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, selectedRepo
                         report={selectedReport} 
                         onReaderModeRequest={onReaderModeRequest}
                         onStateChange={onStateChange}
-                        onPreviewArticle={onPreviewArticle}
                     />
                 ) : (
                     <div className="text-center py-20">
