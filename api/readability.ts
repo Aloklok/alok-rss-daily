@@ -62,25 +62,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             let browser: Browser | null = null;
             try {
                 console.log('Attempting headless render...');
-                let puppeteer;
                 let launchOptions: LaunchOptions;
 
                 if (process.env.VERCEL_ENV) {
                     console.log('Using @sparticuz/chromium for production');
                     const chromium = (await import('@sparticuz/chromium')).default;
-                    puppeteer = (await import('puppeteer-core')).default;
                     
                     launchOptions = {
                         executablePath: await chromium.executablePath(),
                         args: chromium.args,
-                        headless: "new" as any, // 保留 as any 以兼容旧的类型定义
+                        headless: "new" as any,
                         defaultViewport: { width: 1280, height: 720 },
                     };
                 } else {
                     console.log('Using local puppeteer for development');
-                    puppeteer = (await import('puppeteer')).default;
+                    const localPuppeteer = (await import('puppeteer')).default;
                     launchOptions = {
-                        headless: "new" as any, // 保留 as any 以兼容旧的类型定义
+                        executablePath: localPuppeteer.executablePath(),
+                        headless: "new" as any,
                         args: ['--no-sandbox', '--disable-setuid-sandbox']
                     };
                 }
