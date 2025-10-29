@@ -7,7 +7,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!GREADER_API_URL || !AUTH_TOKEN) {
         return res.status(500).json({ message: 'Server configuration error: Missing FreshRSS environment variables.' });
     }
-
+ // --- 在这里添加诊断日志 ---
+  console.log('Attempting to use AUTH_TOKEN:', authToken);
+  console.log('Full Authorization Header being sent:', `GoogleLogin auth=${authToken}`);
     try {
         const response = await fetch(`${GREADER_API_URL}/greader.php/reader/api/0/tag/list?output=json`, {
             method: 'GET',
