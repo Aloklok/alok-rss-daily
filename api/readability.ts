@@ -3,11 +3,6 @@ import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import puppeteer from 'puppeteer-core';
 
-// 从导入的 puppeteer 对象中获取类型，以避免 Vercel 构建时出现类型解析问题
-type Browser = import('puppeteer-core').Browser;
-type HTTPRequest = import('puppeteer-core').HTTPRequest;
-type LaunchOptions = import('puppeteer-core').LaunchOptions;
-
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -62,10 +57,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log('Content analysis:', { contentTextLength: mainContentText.length, shouldTryHeadless });
 
         if (shouldTryHeadless) {
-            let browser: Browser | null = null;
+            let browser: any = null;
             try {
                 console.log('Attempting headless render...');
-                let launchOptions: LaunchOptions;
+                let launchOptions: any;
 
                 if (process.env.VERCEL_ENV) {
                     console.log('Using @sparticuz/chromium for production');
@@ -90,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 browser = await puppeteer.launch(launchOptions);
                 const page = await browser.newPage();
                 await page.setRequestInterception(true);
-                page.on('request', (req: HTTPRequest) => { // 这里的 HTTPRequest 类型现在是明确导入的
+                page.on('request', (req: any) => { // 这里的 HTTPRequest 类型现在是明确导入的
                     if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
                         req.abort();
                     } else {
