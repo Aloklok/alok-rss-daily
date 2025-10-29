@@ -28,6 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         console.log('Processing URL:', url);
+        console.log('ENABLE_HEADLESS_RENDER:', process.env.ENABLE_HEADLESS_RENDER);
         const fetchRes = await fetchWithTimeout(String(url), {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36' }
         });
@@ -54,9 +55,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const isDomainForced = forcedHeadlessDomains.some(domain => currentDomain.includes(domain));
         const shouldTryHeadless = process.env.ENABLE_HEADLESS_RENDER === '1' && (isDomainForced || (isContentTooShort && hasDynamicLoadingHints));
 
-        console.log('Content analysis:', { contentTextLength: mainContentText.length, shouldTryHeadless });
+        console.log('Content analysis:', { contentTextLength: mainContentText.length, shouldTryHeadless, ENABLE_HEADLESS_RENDER_ENV: process.env.ENABLE_HEADLESS_RENDER });
 
         if (shouldTryHeadless) {
+            console.log('Headless rendering path activated.');
             let browser: any = null;
             try {
                 console.log('Attempting headless render...');
