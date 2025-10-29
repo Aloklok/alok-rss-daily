@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
+// [最终修正] 采纳您的建议，为所有 puppeteer 类型使用明确的、独立的类型导入
 import type { Browser, HTTPRequest, LaunchOptions } from 'puppeteer-core';
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000) {
@@ -71,16 +72,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     launchOptions = {
                         executablePath: await chromium.executablePath(),
                         args: chromium.args,
-                        // [最终修正] 使用 as any 绕过旧的类型定义
-                        headless: "new" as any,
+                        headless: "new" as any, // 保留 as any 以兼容旧的类型定义
                         defaultViewport: { width: 1280, height: 720 },
                     };
                 } else {
                     console.log('Using local puppeteer for development');
                     puppeteer = (await import('puppeteer')).default;
                     launchOptions = {
-                        // [最终修正] 使用 as any 绕过旧的类型定义
-                        headless: "new" as any,
+                        headless: "new" as any, // 保留 as any 以兼容旧的类型定义
                         args: ['--no-sandbox', '--disable-setuid-sandbox']
                     };
                 }
@@ -88,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 browser = await puppeteer.launch(launchOptions);
                 const page = await browser.newPage();
                 await page.setRequestInterception(true);
-                page.on('request', (req: HTTPRequest) => {
+                page.on('request', (req: HTTPRequest) => { // 这里的 HTTPRequest 类型现在是明确导入的
                     if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
                         req.abort();
                     } else {
