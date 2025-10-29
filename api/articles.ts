@@ -1,22 +1,64 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// `api/articles` should be backed by Supabase in production. This endpoint currently
-// acts as a placeholder and will return 501 (Not Implemented) when Supabase env is missing.
-// Keep this file minimal so it's clear that article listing is a separate responsibility.
-
-// Minimal runtime declaration for `process` to satisfy TypeScript in this demo environment.
 declare const process: any;
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const GREADER_API_URL = process.env.FRESHRSS_API_URL;
+const AUTH_TOKEN = process.env.FRESHRSS_AUTH_TOKEN;
 
+// This handler now fetches the content of a single article from FreshRSS.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // If Supabase is configured, the implementation should query the `articles` table
-    // and support type=date|category|tag (this repo previously had a Supabase placeholder).
-    if (!SUPABASE_URL || !SUPABASE_KEY) {
-        return res.status(501).json({ message: 'Article listing is not implemented on this deployment. Configure SUPABASE_URL and SUPABASE_KEY to enable.' });
+    if (req.method !== 'POST') {
+        return res.status(405).json({ message: 'Only POST requests are allowed' });
     }
 
-    // If you want, I can implement Supabase queries here. For now, return a helpful message.
-    return res.status(501).json({ message: 'Supabase-backed article queries are not implemented yet. Use /api/starred for FreshRSS starred stream.' });
+    if (!GREADER_API_URL || !AUTH_TOKEN) {
+        return res.status(500).json({ message: 'Server configuration error: Missing FreshRSS environment variables.' });
+    }
+
+    const { id } = req.body;
+
+    if (!id || typeof id !== 'string') {
+        return res.status(400).json({ message: 'Article ID is required.' });
+    }
+
+    try {
+        const url = `${GREADER_API_URL}/greader.php/reader/api/0/stream/items/contents?output=json`;
+        const body = new URLSearchParams({ i: id }).toString();
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: body,
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`FreshRSS content API responded with ${response.status}:`, errorBody);
+            return res.status(502).json({ message: 'Failed to fetch article content from FreshRSS', status: response.status, body: errorBody });
+        }
+
+        const data = await response.json();
+
+        // The response for a single item is not an array, but an object with an `items` array of one.
+        if (!data.items || data.items.length === 0) {
+            return res.status(404).json({ message: 'Article content not found in FreshRSS response.' });
+        }
+
+        const item = data.items[0];
+        const content = item.summary?.content || item.content?.content || '';
+        const source = item.origin?.title || new URL(item.canonical[0]?.href).hostname;
+
+        return res.status(200).json({
+            title: item.title,
+            content: content,
+            source: source,
+        });
+
+    } catch (error: any) {
+        console.error('Error fetching article content:', error);
+        return res.status(500).json({ message: 'Error fetching article content', error: error.message });
+    }
 }

@@ -131,24 +131,28 @@ export const markAllAsRead = async (): Promise<void> => {
 };
 
 export const getCleanArticleContent = async (article: Article): Promise<CleanArticleContent> => {
-    await sleep(800);
     try {
-        const readabilityUrl = `/api/readability?url=${encodeURIComponent(article.link)}`;
-        console.log('Fetching article content from:', readabilityUrl);
-        const response = await fetch(readabilityUrl);
+        const response = await fetch('/api/articles', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ id: article.id }),
+        });
+
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Readability API error:', response.status, errorText);
-            throw new Error(`Failed to fetch readable content from backend: ${response.status} ${errorText}`);
+            console.error('Article content API error:', response.status, errorText);
+            throw new Error(`Failed to fetch article content from backend: ${response.status} ${errorText}`);
         }
         return await response.json();
-    } catch(e) {
-        console.error("Using mock readability content due to error:", e);
+    } catch (e) {
+        console.error("Failed to fetch article content:", e);
         return {
             title: article.title,
             source: article.sourceName,
-            content: `<h3>无法加载文章内容</h3><p>由于网络限制或目标网站策略，无法获取文章的阅读模式内容。请尝试直接访问原文链接。</p><p><a href="${article.link}" target="_blank" rel="noopener noreferrer">点击此处查看原文</a></p>`
-        }
+            content: `<h3>无法加载文章内容</h3><p>获取文章内容时出错。请尝试直接访问原文链接。</p><p><a href="${article.link}" target="_blank" rel="noopener noreferrer">点击此处查看原文</a></p>`
+        };
     }
 };
 
