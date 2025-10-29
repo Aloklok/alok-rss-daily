@@ -1,9 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
-// [最终修正] 采纳您的建议，为所有 puppeteer 类型使用明确的、独立的类型导入
-import type { Browser, HTTPRequest, LaunchOptions } from 'puppeteer-core'; // <-- 从 puppeteer-core 导入类型
-import puppeteer from 'puppeteer-core'; // <-- 导入 puppeteer-core 的实现
+import puppeteer from 'puppeteer-core';
+
+// 从导入的 puppeteer 对象中获取类型，以避免 Vercel 构建时出现类型解析问题
+type Browser = import('puppeteer-core').Browser;
+type HTTPRequest = import('puppeteer-core').HTTPRequest;
+type LaunchOptions = import('puppeteer-core').LaunchOptions;
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000) {
     const controller = new AbortController();
