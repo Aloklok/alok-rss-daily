@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar';
 import Briefing from './components/Briefing';
 import ReaderView from './components/ReaderView';
 import { BriefingReport, Article, CleanArticleContent, Filter, AvailableFilters } from './types';
-import { getAvailableDates, getBriefingReportsByDate, markAllAsRead, getCleanArticleContent, getArticleStates, editArticleState, editArticleTag, getAvailableFilters, getArticlesByLabel, getStarredArticles } from './services/api';
+import { getBriefingReportsByDate, markAllAsRead, getCleanArticleContent, getArticleStates, editArticleState, editArticleTag, getAvailableFilters, getArticlesByLabel, getStarredArticles } from './services/api';
 import ArticlePreviewModal from './components/ArticlePreviewModal';
 import ArticleDetail from './components/ArticleDetail';
 import ArticleList from './components/ArticleList'; // Import the new ArticleList component
@@ -19,10 +19,9 @@ const App: React.FC = () => {
     const [filteredArticles, setFilteredArticles] = useState<Article[]>([]); // New state for category/tag articles
     const [isLoading, setIsLoading] = useState(true);
     
-    const [dates, setDates] = useState<string[]>([]);
+    // Removed dates, selectedMonth, availableMonths, datesForMonth states and related useMemos
     const [activeFilter, setActiveFilter] = useState<Filter | null>(null);
     const [availableFilters, setAvailableFilters] = useState<AvailableFilters>({ categories: [], tags: [] });
-    const [selectedMonth, setSelectedMonth] = useState<string>('');
 
     const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
     
@@ -43,13 +42,12 @@ const App: React.FC = () => {
         setSidebarArticle(null); // Clear any inline article view
 
         if (filter.type === 'date') {
-            // Date filtering logic remains untouched, it uses mock data.
-            // We only clear filteredArticles if a date filter is selected.
-            setFilteredArticles([]);
+            setFilteredArticles([]); // Clear filtered articles if a date filter is selected
             setReports([]); // Clear reports to ensure Briefing re-fetches if needed
             setSelectedReportId(null);
             try {
-                const fetchedReports = await getBriefingReportsByDate(filter.value);
+                // getBriefingReportsByDate now fetches all articles, no date parameter needed
+                const fetchedReports = await getBriefingReportsByDate();
                 const articles = fetchedReports.flatMap(report => report.articles);
                 const articleIds = articles.map(article => article.id);
 
@@ -110,27 +108,13 @@ const App: React.FC = () => {
         const fetchInitialData = async () => {
             setIsLoading(true);
             try {
-                const [availableDates, filters] = await Promise.all([
-                    getAvailableDates(),
-                    getAvailableFilters()
-                ]);
-
-                const sortedDates = availableDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-                setDates(sortedDates);
+                const filters = await getAvailableFilters();
                 setAvailableFilters(filters);
                 
-                if (sortedDates.length > 0) {
-                    const latestDate = sortedDates[0];
-                    const initialFilter = { type: 'date' as const, value: latestDate };
-                    setActiveFilter(initialFilter);
-                    setSelectedMonth(latestDate.substring(0, 7));
-                    // Initial fetch for date filter
-                    fetchData(initialFilter);
-                } else {
-                    // If no dates, set activeFilter to null, main content will show prompt
-                    setActiveFilter(null);
-                    setIsLoading(false);
-                }
+                // Set initial filter to 'date' to show all articles as "Today's Briefing"
+                const initialFilter = { type: 'date' as const, value: 'today' };
+                setActiveFilter(initialFilter);
+                fetchData(initialFilter);
             } catch (error) {
                 console.error("Failed to fetch initial data", error);
                 setIsLoading(false);
@@ -141,28 +125,18 @@ const App: React.FC = () => {
 
     const refreshSidebar = async () => {
         try {
-            const [availableDatesNew, filtersNew] = await Promise.all([getAvailableDates(), getAvailableFilters()]);
-            const sortedDates = availableDatesNew.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-            setDates(sortedDates);
+            const filtersNew = await getAvailableFilters();
             setAvailableFilters(filtersNew);
+            // Re-fetch current active filter data if it's not starred
+            if (activeFilter && activeFilter.type !== 'starred') {
+                fetchData(activeFilter);
+            }
         } catch (error) {
             console.error('Failed to refresh sidebar data', error);
         }
     };
 
-    const availableMonths = useMemo(() => {
-        if (dates.length === 0) return [];
-        const monthSet = new Set<string>();
-        dates.forEach(date => {
-            monthSet.add(date.substring(0, 7));
-        });
-        return Array.from(monthSet).sort((a, b) => b.localeCompare(a));
-    }, [dates]);
-
-    const datesForMonth = useMemo(() => {
-        if (!selectedMonth) return [];
-        return dates.filter(date => date.startsWith(selectedMonth));
-    }, [dates, selectedMonth]);
+    // Removed availableMonths and datesForMonth useMemos
 
     const handleFilterChange = (filter: Filter) => {
         setActiveFilter(filter);
@@ -170,12 +144,9 @@ const App: React.FC = () => {
     };
 
     const handleResetFilter = () => {
-        if (dates.length > 0) {
-            const latestDate = dates[0];
-            const resetFilter = { type: 'date' as const, value: latestDate };
-            handleFilterChange(resetFilter);
-            setSelectedMonth(latestDate.substring(0, 7));
-        }
+        // Reset to the default "Today's Briefing" view
+        const resetFilter = { type: 'date' as const, value: 'today' };
+        handleFilterChange(resetFilter);
     };
     
     const handleArticleStateChange = async (articleId: string | number, newTags: string[]) => {
@@ -279,11 +250,8 @@ const App: React.FC = () => {
     return (
         <div className="flex flex-col md:flex-row h-screen font-sans">
             <Sidebar 
-                dates={datesForMonth} 
+                // Removed date-related props
                 isLoading={isLoading}
-                availableMonths={availableMonths}
-                selectedMonth={selectedMonth}
-                onMonthChange={setSelectedMonth}
                 availableFilters={availableFilters}
                 activeFilter={activeFilter}
                 onFilterChange={handleFilterChange}
