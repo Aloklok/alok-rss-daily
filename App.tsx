@@ -3,9 +3,10 @@ import Sidebar from './components/Sidebar';
 import Briefing from './components/Briefing';
 import ReaderView from './components/ReaderView';
 import { BriefingReport, Article, CleanArticleContent, Filter, AvailableFilters } from './types';
-import { getAvailableDates, getBriefingReportsByDate, markAllAsRead, getCleanArticleContent, getArticleStates, editArticleState, editArticleTag, getAvailableFilters, getArticlesByCategory, getArticlesByTag, getStarredArticles } from './services/api';
+import { getAvailableDates, getBriefingReportsByDate, markAllAsRead, getCleanArticleContent, getArticleStates, editArticleState, editArticleTag, getAvailableFilters, getArticlesByLabel, getStarredArticles } from './services/api';
 import ArticlePreviewModal from './components/ArticlePreviewModal';
 import ArticleDetail from './components/ArticleDetail';
+import ArticleList from './components/ArticleList'; // Import the new ArticleList component
 
 const LoadingSpinner: React.FC = () => (
     <div className="flex items-center justify-center h-full w-full">
@@ -15,6 +16,7 @@ const LoadingSpinner: React.FC = () => (
 
 const App: React.FC = () => {
     const [reports, setReports] = useState<BriefingReport[]>([]);
+    const [filteredArticles, setFilteredArticles] = useState<Article[]>([]); // New state for category/tag articles
     const [isLoading, setIsLoading] = useState(true);
     
     const [dates, setDates] = useState<string[]>([]);
@@ -38,51 +40,68 @@ const App: React.FC = () => {
     const fetchData = useCallback(async (filter: Filter) => {
         if (!filter) return;
         setIsLoading(true);
-        setReports([]);
-        setSelectedReportId(null);
-        try {
-            let fetchedReports: BriefingReport[] = [];
-            let articles: (Omit<Article, 'tags'>)[] = [];
+        setSidebarArticle(null); // Clear any inline article view
 
-            if (filter.type === 'date') {
-                fetchedReports = await getBriefingReportsByDate(filter.value);
-                articles = fetchedReports.flatMap(report => report.articles);
-            } else if (filter.type === 'category') {
-                articles = await getArticlesByCategory(filter.value);
-            } else if (filter.type === 'tag') {
-                articles = await getArticlesByTag(filter.value);
-            } else if (filter.type === 'starred') {
-                articles = await getStarredArticles();
+        if (filter.type === 'date') {
+            // Date filtering logic remains untouched, it uses mock data.
+            // We only clear filteredArticles if a date filter is selected.
+            setFilteredArticles([]);
+            setReports([]); // Clear reports to ensure Briefing re-fetches if needed
+            setSelectedReportId(null);
+            try {
+                const fetchedReports = await getBriefingReportsByDate(filter.value);
+                const articles = fetchedReports.flatMap(report => report.articles);
+                const articleIds = articles.map(article => article.id);
+
+                if (articleIds.length > 0) {
+                    const states = await getArticleStates(articleIds);
+                    const reportsWithState = fetchedReports.map(report => ({
+                        ...report,
+                        articles: report.articles.map(article => ({
+                            ...article,
+                            tags: states[article.id] || []
+                        }))
+                    }));
+                    setReports(reportsWithState as BriefingReport[]);
+                } else {
+                    setReports(fetchedReports as BriefingReport[]);
+                }
+                if (fetchedReports.length > 0) {
+                    setSelectedReportId(fetchedReports[0].id);
+                }
+            } catch (error) {
+                console.error(`Failed to fetch data for date filter`, error);
+                setReports([]);
+            } finally {
+                setIsLoading(false);
             }
-
-            if (filter.type !== 'date') {
-                const sortedArticles = (articles as Article[]).sort((a, b) => new Date(b.published).getTime() - new Date(a.published).getTime())
-                fetchedReports = articles.length > 0 ? [{ id: 999, title: 'Filtered Results', articles: sortedArticles }] : [];
-            }
-            
-            const articleIds = articles.map(article => article.id);
-
-            if (articleIds.length > 0) {
-                const states = await getArticleStates(articleIds);
-                const reportsWithState = fetchedReports.map(report => ({
-                    ...report,
-                    articles: report.articles.map(article => ({
+        } else if (filter.type === 'category' || filter.type === 'tag') {
+            setReports([]); // Clear reports if category/tag filter is selected
+            setSelectedReportId(null);
+            try {
+                const articles = await getArticlesByLabel(filter);
+                const articleIds = articles.map(article => article.id);
+                if (articleIds.length > 0) {
+                    const states = await getArticleStates(articleIds);
+                    const articlesWithState = articles.map(article => ({
                         ...article,
                         tags: states[article.id] || []
-                    }))
-                }));
-                 setReports(reportsWithState as BriefingReport[]);
-            } else {
-                setReports(fetchedReports as BriefingReport[]);
+                    }));
+                    setFilteredArticles(articlesWithState);
+                } else {
+                    setFilteredArticles([]);
+                }
+            } catch (error) {
+                console.error(`Failed to fetch data for ${filter.type} filter`, error);
+                setFilteredArticles([]);
+            } finally {
+                setIsLoading(false);
             }
-
-            if (fetchedReports.length > 0) {
-                setSelectedReportId(fetchedReports[0].id);
-            }
-        } catch (error) {
-            console.error(`Failed to fetch data for filter`, error);
+        } else if (filter.type === 'starred') {
+            // Starred articles are handled in Sidebar, no main content change needed.
             setReports([]);
-        } finally {
+            setFilteredArticles([]);
+            setSelectedReportId(null);
             setIsLoading(false);
         }
     }, []);
@@ -105,10 +124,12 @@ const App: React.FC = () => {
                     const initialFilter = { type: 'date' as const, value: latestDate };
                     setActiveFilter(initialFilter);
                     setSelectedMonth(latestDate.substring(0, 7));
+                    // Initial fetch for date filter
                     fetchData(initialFilter);
                 } else {
-                     setActiveFilter({ type: 'starred', value: 'true'});
-                     fetchData({ type: 'starred', value: 'true'});
+                    // If no dates, set activeFilter to null, main content will show prompt
+                    setActiveFilter(null);
+                    setIsLoading(false);
                 }
             } catch (error) {
                 console.error("Failed to fetch initial data", error);
@@ -158,20 +179,30 @@ const App: React.FC = () => {
     };
     
     const handleArticleStateChange = async (articleId: string | number, newTags: string[]) => {
+        // This function needs to handle state updates for both reports and filteredArticles
+        // depending on which view is active or if the article exists in both.
+        // For simplicity, we'll update both if the article is found.
+
+        const updateArticleTags = (articles: Article[], id: string | number, tags: string[]) => {
+            return articles.map(article => 
+                article.id === id ? { ...article, tags: tags } : article
+            );
+        };
+
         const originalReports = reports;
-        const updatedReports = reports.map(report => ({
+        const originalFilteredArticles = filteredArticles;
+
+        setReports(prevReports => prevReports.map(report => ({
             ...report,
-            articles: report.articles.map(article => 
-                article.id === articleId ? { ...article, tags: newTags } : article
-            )
-        }));
-        setReports(updatedReports);
+            articles: updateArticleTags(report.articles, articleId, newTags)
+        })));
+        setFilteredArticles(prevArticles => updateArticleTags(prevArticles, articleId, newTags));
 
         try {
-            const originalArticle = originalReports.flatMap(r => r.articles).find(a => a.id === articleId);
-            // FIX: Explicitly type `originalTags` to address type inference issues where `reports`
-            // state might contain untyped objects from the API, causing `originalTags` to be inferred as `any[]`.
-            // This ensures `originalUserTags` becomes `Set<string>` and subsequent variables are correctly typed.
+            // Find the original article from either source to compare tags
+            const originalArticle = originalReports.flatMap(r => r.articles).find(a => a.id === articleId) ||
+                                    originalFilteredArticles.find(a => a.id === articleId);
+
             const originalTags: string[] = originalArticle?.tags || [];
             
             const isNowStarred = newTags.includes('user/-/state/com.google/starred');
@@ -197,6 +228,7 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Failed to update article state, rolling back.", error);
             setReports(originalReports);
+            setFilteredArticles(originalFilteredArticles);
         }
     };
 
@@ -263,7 +295,7 @@ const App: React.FC = () => {
                     <LoadingSpinner />
                 ) : sidebarArticle ? (
                     <ArticleDetail article={sidebarArticle} onClose={() => setSidebarArticle(null)} />
-                ) : (
+                ) : activeFilter?.type === 'date' ? (
                     <Briefing 
                         reports={reports} 
                         activeFilter={activeFilter}
@@ -274,6 +306,16 @@ const App: React.FC = () => {
                         onStateChange={handleArticleStateChange}
                         onResetFilter={handleResetFilter}
                     />
+                ) : (activeFilter?.type === 'category' || activeFilter?.type === 'tag') ? (
+                    <ArticleList
+                        articles={filteredArticles}
+                        onOpenArticle={handleOpenReader}
+                        isLoading={isLoading}
+                    />
+                ) : (
+                    <div className="p-8 text-center text-gray-500">
+                        <p>请选择一个分类或标签来查看文章列表。</p>
+                    </div>
                 )}
                 
                 <div className="fixed bottom-8 right-8 z-20 flex flex-col-reverse items-center gap-y-3">

@@ -217,30 +217,23 @@ export const editArticleTag = async (articleId: string | number, tagsToAdd: stri
     console.log(`Updated tags for ${articleId}:`, article.tags);
 };
 
-export const getArticlesByCategory = async (category: string): Promise<Article[]> => {
+export const getArticlesByLabel = async (filter: Filter): Promise<Article[]> => {
     try {
-        const response = await fetch(`/api/articles?type=category&value=${encodeURIComponent(category)}`);
+        const response = await fetch(`/api/articles-categories-tags?name=${encodeURIComponent(filter.value)}`);
         if (!response.ok) {
             throw new Error(`API request failed with status ${response.status}`);
         }
         return await response.json();
     } catch (error) {
-        console.error(`Failed to fetch articles for category ${category}, falling back to mock data:`, error);
-        return MOCK_ARTICLES.filter(a => a.category === category);
-    }
-};
-
-export const getArticlesByTag = async (tag: string): Promise<Article[]> => {
-    try {
-        const response = await fetch(`/api/articles?type=tag&value=${encodeURIComponent(tag)}`);
-        if (!response.ok) {
-            throw new Error(`API request failed with status ${response.status}`);
+        console.error(`Failed to fetch articles for ${filter.type} ${filter.value}, falling back to mock data:`, error);
+        // Fallback to mock data based on filter type
+        if (filter.type === 'category') {
+            return MOCK_ARTICLES.filter(a => a.category === filter.value);
+        } else if (filter.type === 'tag') {
+            const tagId = MOCK_TAGS.find(t => t.label === filter.value)?.id;
+            return MOCK_ARTICLES.filter(a => a.tags?.includes(tagId || ''));
         }
-        return await response.json();
-    } catch (error) {
-        console.error(`Failed to fetch articles for tag ${tag}, falling back to mock data:`, error);
-        const tagId = MOCK_TAGS.find(t => t.label === tag)?.id;
-        return MOCK_ARTICLES.filter(a => a.tags?.includes(tagId || ''));
+        return [];
     }
 };
 
@@ -259,13 +252,13 @@ export const getStarredArticles = async (): Promise<Article[]> => {
 
 export const getAvailableFilters = async (): Promise<AvailableFilters> => {
     try {
-        const response = await fetch('/api/filters');
+        const response = await fetch('/api/list-categories-tags');
         if (!response.ok) {
             throw new Error(`API request failed with status ${response.status}`);
         }
         const data = await response.json();
         if (!data.categories || !data.tags) {
-            throw new Error('Invalid data format from /api/filters');
+            throw new Error('Invalid data format from /api/list-categories-tags');
         }
         return data;
     } catch (error) {
