@@ -58,7 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
     const streamId = encodeURIComponent('user/-/state/com.google/starred');
     // Use same greader.php prefix as /api/filters.ts to match FreshRSS install URL structure
-    const url = `${GREADER_API_URL}/greader.php/reader/api/0/stream/contents/${streamId}?output=json`;
+    // 添加excludeContent=1参数来减少数据量，提高加载速度
+    const url = `${GREADER_API_URL}/greader.php/reader/api/0/stream/contents/${streamId}?output=json&excludeContent=1`;
     console.log('Requesting FreshRSS starred stream URL:', url);
 
         const response = await fetch(url, {

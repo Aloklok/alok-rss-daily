@@ -67,22 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             isActive ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'
         }`;
     
-    useEffect(() => {
-        let mounted = true;
-        const load = async () => {
-            setIsLoadingStarred(true);
-            try {
-                const data = await getStarredArticles();
-                if (mounted) setStarredArticles(data as Article[]);
-            } catch (e) {
-                console.error('Failed to load starred articles in sidebar', e);
-            } finally {
-                if (mounted) setIsLoadingStarred(false);
-            }
-        };
-        load();
-        return () => { mounted = false; };
-    }, []);
+    // 移除自动加载收藏文章的useEffect，改为在展开时加载
 
     const handleRefreshClick = async () => {
         if (!onRefresh) return;
@@ -115,10 +100,23 @@ const Sidebar: React.FC<SidebarProps> = ({
              <nav className="flex flex-col gap-1.5">
                 <div>
                     <button
-                        onClick={() => {
-                            // toggle expand only; do NOT change active filter to avoid triggering
-                            // a full refresh/fetch which shows the global loading spinner.
-                            setStarredExpanded(s => !s);
+                        onClick={async () => {
+                            // toggle expand state
+                            const newExpandedState = !starredExpanded;
+                            setStarredExpanded(newExpandedState);
+                            
+                            // 只在展开时获取收藏数据
+                            if (newExpandedState) {
+                                setIsLoadingStarred(true);
+                                try {
+                                    const data = await getStarredArticles();
+                                    setStarredArticles(data as Article[]);
+                                } catch (e) {
+                                    console.error('Failed to load starred articles on expand', e);
+                                } finally {
+                                    setIsLoadingStarred(false);
+                                }
+                            }
                         }}
                         className={listItemButtonClass(isFilterActive('starred', 'true'))}
                     >

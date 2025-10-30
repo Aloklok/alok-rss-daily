@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
         const folderName = encodeURIComponent(name);
         const streamId = `user/-/label/${folderName}`;
-        const url = `${GREADER_API_URL}/greader.php/reader/api/0/stream/contents/${streamId}?output=json`;
+        const url = `${GREADER_API_URL}/greader.php/reader/api/0/stream/contents/${streamId}?output=json&excludeContent=1`;
 
         const response = await fetch(url, {
             method: 'GET',
@@ -69,7 +69,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.error(`FreshRSS stream content API responded with ${response.status}:`, errorBody);
             return res.status(502).json({ message: 'Failed to fetch stream content from FreshRSS', status: response.status, body: errorBody });
         }
-
         const data = await response.json();
         const items = Array.isArray(data.items) ? data.items : [];
         const articles = items.map(mapFreshItemToMinimalArticle);

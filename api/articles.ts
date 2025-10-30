@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const data = await response.json();
-
+        console.log(data);
         // The response for a single item is not an array, but an object with an `items` array of one.
         if (!data.items || data.items.length === 0) {
             return res.status(404).json({ message: 'Article content not found in FreshRSS response.' });

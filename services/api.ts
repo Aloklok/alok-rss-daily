@@ -113,14 +113,33 @@ export const getCleanArticleContent = async (article: Article): Promise<CleanArt
 };
 
 export const getArticleStates = async (articleIds: (string | number)[]): Promise<{ [key: string | number]: string[] }> => {
-    // This function would ideally fetch states from Supabase or FreshRSS, but for now, it's a placeholder.
-    await sleep(200);
-    const states: { [key: string | number]: string[] } = {};
-    articleIds.forEach(id => {
-        states[id] = []; // Default to empty tags
-    });
-    console.log("Fetching article states (placeholder).");
-    return states;
+    if (!articleIds || articleIds.length === 0) {
+        return {};
+    }
+    
+    try {
+        const response = await fetch('/api/article-states', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ articleIds }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Failed to fetch article states:', error);
+        // 出错时返回空状态
+        const states: { [key: string | number]: string[] } = {};
+        articleIds.forEach(id => {
+            states[id] = []; // 默认为空标签
+        });
+        return states;
+    }
 };
 
 export const editArticleState = async (articleId: string | number, action: 'star' | 'read', isAdding: boolean): Promise<void> => {
