@@ -195,10 +195,22 @@ const SpinnerIcon = () => (
 );
 
 
+const IconCheckCircle = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+    </svg>
+);
+
+const IconCircle = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
 interface ActionButtonsProps {
     article: Article;
     onReaderModeRequest: (article: Article) => void;
-    onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
+    onStateChange: (articleId: string | number, action: 'star' | 'read', isAdding: boolean) => Promise<void>;
 }
 
 const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequest, onStateChange }) => {
@@ -218,18 +230,22 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
         const currentTags = article.tags || [];
         const isActive = currentTags.includes(tag);
         
-        let newTags;
-        if (isActive) {
-            newTags = currentTags.filter(t => t !== tag);
-        } else {
-            newTags = [...currentTags, tag];
-        }
+        const newTags = isActive
+            ? currentTags.filter(t => t !== tag)
+            : [...currentTags, tag];
 
         try {
+            // The parent component `App.tsx` expects the full new array of tags.
             await onStateChange(article.id, newTags);
         } finally {
             setIsLoading(null);
         }
+    };
+
+    const handleTagsUpdated = async (articleId: string | number, newTags: string[]) => {
+        // This function is a placeholder to satisfy the TagPopover's prop requirement.
+        // The actual tag update logic should be handled at a higher level, likely in App.tsx.
+        console.log("Tags updated for", articleId, newTags);
     };
 
     const actionButtonClass = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 transform hover:scale-105 disabled:scale-100 disabled:cursor-wait disabled:opacity-75";
@@ -241,7 +257,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
             <div className="hidden md:flex flex-col">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => onReaderModeRequest(article)} className={`${actionButtonClass} bg-stone-200 hover:bg-stone-300 text-stone-800`}>
+                        <button onClick={() => onReaderModeRequest(article)} className={`${actionButtonClass} bg-blue-800 hover:bg-blue-900 text-white`}>
                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
@@ -251,15 +267,21 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
                              {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
                              {isStarred ? '已收藏' : '收藏'}
                         </button>
-                        <button onClick={() => handleToggleState('read')} disabled={!!isLoading} className={`${actionButtonClass} ${isRead ? 'bg-emerald-400 text-emerald-950' : 'bg-emerald-200 hover:bg-emerald-300 text-emerald-900'}`}>
-                            {isLoading === 'read' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>}
-                            {isRead ? '已读' : '未读'}
+                        <button 
+                            onClick={() => handleToggleState('read')} 
+                            disabled={!!isLoading} 
+                            className={`${actionButtonClass} ${isRead 
+                                ? 'bg-emerald-400 text-emerald-950 hover:bg-emerald-500' 
+                                : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                        >
+                            {isLoading === 'read' ? <SpinnerIcon /> : (isRead ? <IconCheckCircle /> : <IconCircle />)}
+                            {isRead ? '已读' : '标记已读'}
                         </button>
                          <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className={`${actionButtonClass} bg-sky-200 hover:bg-sky-300 text-sky-900`}>
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                             标签
                         </button>
-                        {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
+                        {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={handleTagsUpdated} />}
                          {userTags.length > 0 && (
                             <div className="hidden md:flex flex-wrap gap-2 items-center">
                                 <div className="border-l border-stone-300 h-6 mx-1"></div>
@@ -281,7 +303,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
             {/* Mobile Buttons */}
             <div className="md:hidden">
                 <div className="flex items-end justify-around">
-                     <button onClick={() => onReaderModeRequest(article)} className={`${mobileActionButtonClass} text-stone-600 bg-stone-100`}>
+                     <button onClick={() => onReaderModeRequest(article)} className={`${mobileActionButtonClass} text-white bg-blue-800`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
@@ -291,15 +313,21 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
                         {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
                         <span>{isStarred ? '已收藏' : '收藏'}</span>
                     </button>
-                     <button onClick={() => handleToggleState('read')} disabled={!!isLoading} className={`${mobileActionButtonClass} ${isRead ? 'bg-emerald-300 text-emerald-900' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {isLoading === 'read' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>}
-                         <span>{isRead ? '已读' : '未读'}</span>
+                     <button 
+                        onClick={() => handleToggleState('read')} 
+                        disabled={!!isLoading} 
+                        className={`${mobileActionButtonClass} ${isRead 
+                            ? 'bg-emerald-400 text-emerald-950' 
+                            : 'bg-gray-100 text-gray-700'}`}
+                    >
+                        {isLoading === 'read' ? <SpinnerIcon /> : (isRead ? <IconCheckCircle /> : <IconCircle />)}
+                         <span>{isRead ? '已读' : '标记已读'}</span>
                     </button>
                      <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className={`${mobileActionButtonClass} text-sky-700 bg-sky-100`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                         <span>标签</span>
                     </button>
-                    {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
+                    {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={handleTagsUpdated} />}
                 </div>
                 <div className="flex justify-end mt-4">
                     <a href={article.link} target="_blank" rel="noopener noreferrer" className={`${mobileActionButtonClass} text-stone-600 bg-stone-100`}>

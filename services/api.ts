@@ -1,11 +1,4 @@
 import { Article, BriefingReport, Tag, CleanArticleContent, AvailableFilters, Filter } from '../types';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // --- Mock Data Store (only MOCK_TAGS remains for now) ---
 let MOCK_TAGS: Tag[] = [
@@ -31,116 +24,51 @@ export const getTodayInShanghai = () => {
 // --- API Functions using Supabase and FreshRSS backend ---
 
 export const getAvailableDates = async (): Promise<string[]> => {
-    const dates: string[] = [];
-    const todayFormatted = getTodayInShanghai();
-
-    if (!todayFormatted) return [];
-
-    const [yearStr, monthStr, dayStr] = todayFormatted.split('-');
-    const currentYear = parseInt(yearStr, 10);
-    const currentMonth = parseInt(monthStr, 10) - 1; // Month is 0-indexed
-    const currentDay = parseInt(dayStr, 10);
-
-    for (let i = 1; i <= currentDay; i++) {
-        const date = new Date(currentYear, currentMonth, i);
-        // Format: YYYY-MM-DD for internal use and filtering
-        const formattedYear = date.getFullYear();
-        const formattedMonth = String(date.getMonth() + 1).padStart(2, '0');
-        const formattedDay = String(date.getDate()).padStart(2, '0');
-        dates.push(`${formattedYear}-${formattedMonth}-${formattedDay}`);
+    try {
+        const response = await fetch('/api/get-available-dates');
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+        const dates = await response.json();
+        // The backend already returns sorted, unique dates.
+        return dates;
+    } catch (error) {
+        console.error('Failed to fetch available dates from backend:', error);
+        return []; // Fallback to an empty array on error
     }
-    return dates.reverse(); // Display newest first
 };
 
 type TimeSlot = 'morning' | 'afternoon' | 'evening';
 
 export const getBriefingReportsByDate = async (date: string, slot?: TimeSlot): Promise<BriefingReport[]> => {
     try {
-        let data: Article[] = [];
-        let error: any = null;
-
-        // Compare by Shanghai local day: use explicit +08:00 offsets
-        // Time slot windows (Asia/Shanghai):
-        // - morning:    00:00:00.000 — 11:59:59.999
-        // - afternoon:  12:00:00.000 — 17:59:59.999
-        // - evening:    18:00:00.000 — 23:59:59.999
-
-        const makeRange = (start: string, end: string) => ({ start, end });
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const toNextDate = (ds: string) => {
-            const [y, m, d] = ds.split('-').map(v => parseInt(v, 10));
-            const dt = new Date(Date.UTC(y, (m - 1), d));
-            dt.setUTCDate(dt.getUTCDate() + 1);
-            const ny = dt.getUTCFullYear();
-            const nm = pad(dt.getUTCMonth() + 1);
-            const nd = pad(dt.getUTCDate());
-            return `${ny}-${nm}-${nd}`;
-        };
-
-        let ranges: Array<{ start: string; end: string }>; 
-        if (!slot) {
-            ranges = [makeRange(`${date}T00:00:00.000+08:00`, `${date}T23:59:59.999+08:00`)];
-        } else if (slot === 'morning') {
-            ranges = [makeRange(`${date}T00:00:00.000+08:00`, `${date}T11:59:59.999+08:00`)];
-        } else if (slot === 'afternoon') {
-            ranges = [makeRange(`${date}T12:00:00.000+08:00`, `${date}T17:59:59.999+08:00`)];
-        } else {
-            // evening
-            ranges = [makeRange(`${date}T18:00:00.000+08:00`, `${date}T23:59:59.999+08:00`)];
+        const url = new URL('/api/get-briefings', window.location.origin);
+        url.searchParams.append('date', date);
+        if (slot) {
+            url.searchParams.append('slot', slot);
         }
 
-        // Execute one or two queries depending on ranges
-        for (const r of ranges) {
-            const { data: chunk, error: err } = await supabase
-                .from('articles')
-                .select('*')
-                .gte('crawlTime', r.start)
-                .lte('crawlTime', r.end);
-            if (err) {
-                error = err;
-                break;
-            }
-            if (chunk && chunk.length > 0) data = data.concat(chunk as any);
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
         }
-
-        if (error) throw error;
+        
+        const data: Article[] = await response.json();
 
         if (!data || data.length === 0) return [];
 
-        const reportsMap = new Map<string, BriefingReport>();
-
-        data.forEach((article: Article) => {
-            const section = article.briefingSection || '未分类';
-            if (!reportsMap.has(section)) {
-                reportsMap.set(section, { id: Math.random(), title: `${section}简报`, articles: [] });
-            }
-            reportsMap.get(section)?.articles.push(article);
-        });
-
-        // Group all articles under a single "Today" report if no specific date filter was applied
-        // Or if a specific date filter was applied, group them under a report for that date
-        // Deduplicate by id, then sort by crawlTime descending with a fallback to published when crawlTime is missing
-        const uniqueById = new Map<string | number, Article>();
-        data.forEach((a) => {
-            uniqueById.set(a.id, a);
-        });
-        const deduped = Array.from(uniqueById.values());
-        const articlesForReport = deduped.sort((a: Article, b: Article) => {
-            const aTime = new Date(a.crawlTime || a.published).getTime();
-            const bTime = new Date(b.crawlTime || b.published).getTime();
-            return bTime - aTime;
-        });
+        // The backend now returns the articles directly. The frontend's responsibility is to group them for display.
         const reportTitle = date === 'today' ? '今日简报' : `${new Date(date).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}简报`;
 
         const singleReport: BriefingReport = {
             id: 1, // A fixed ID for the main report
             title: reportTitle,
-            articles: articlesForReport,
+            articles: data, // The data from the API is already sorted
         };
 
         return [singleReport];
     } catch (error) {
-        console.error(`Failed to fetch briefing reports from Supabase:`, error);
+        console.error(`Failed to fetch briefing reports from backend:`, error);
         return []; // Fallback to empty array on error
     }
 };
@@ -194,9 +122,25 @@ export const getArticleStates = async (articleIds: (string | number)[]): Promise
 };
 
 export const editArticleState = async (articleId: string | number, action: 'star' | 'read', isAdding: boolean): Promise<void> => {
-    // This function would ideally update Supabase or FreshRSS, but for now, it's a placeholder.
-    await sleep(400);
-    console.log(`Updating state for ${articleId} (placeholder): ${action} ${isAdding ? 'add' : 'remove'}`);
+    try {
+        const response = await fetch('/api/edit-article-state', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ articleId, action, isAdding }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to update article state');
+        }
+        // No need to return anything on success, the caller can handle UI updates.
+    } catch (error) {
+        console.error(`Failed to edit article state for ${articleId}:`, error);
+        // Re-throw the error so the UI layer can catch it and display a notification if needed.
+        throw error;
+    }
 };
 
 export const getTags = async (): Promise<Tag[]> => {
