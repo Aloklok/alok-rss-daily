@@ -29,10 +29,14 @@ export interface Article {
   tags?: string[];
 }
 
+export type GroupedArticles = {
+  [importance: string]: Article[];
+};
+
 export interface BriefingReport {
   id: number;
   title: string;
-  articles: Article[];
+  articles: GroupedArticles;
 }
 
 export interface CleanArticleContent {

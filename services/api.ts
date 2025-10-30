@@ -53,17 +53,19 @@ export const getBriefingReportsByDate = async (date: string, slot?: TimeSlot): P
             throw new Error(`API request failed with status ${response.status}`);
         }
         
-        const data: Article[] = await response.json();
+        const data: GroupedArticles = await response.json();
 
-        if (!data || data.length === 0) return [];
+        // Check if the returned object is empty or contains no articles
+        if (!data || Object.values(data).every(arr => arr.length === 0)) {
+            return [];
+        }
 
-        // The backend now returns the articles directly. The frontend's responsibility is to group them for display.
-        const reportTitle = date === 'today' ? '今日简报' : `${new Date(date).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}简报`;
+        const reportTitle = date === 'today' ? '今日简报' : `${new Date(date).toLocaleString('zh-CN', { month: 'long', day: 'numeric' })}简报`;
 
         const singleReport: BriefingReport = {
             id: 1, // A fixed ID for the main report
             title: reportTitle,
-            articles: data, // The data from the API is already sorted
+            articles: data, // The data from the API is now the grouped articles object
         };
 
         return [singleReport];

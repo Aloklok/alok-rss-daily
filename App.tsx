@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Sidebar from './components/Sidebar';
 import Briefing from './components/Briefing';
 import ReaderView from './components/ReaderView';
-import { BriefingReport, Article, CleanArticleContent, Filter, AvailableFilters } from './types';
+import { BriefingReport, Article, CleanArticleContent, Filter, AvailableFilters, Tag } from './types';
 import { getAvailableDates, getBriefingReportsByDate, markAllAsRead, getCleanArticleContent, getArticleStates, editArticleState, editArticleTag, getAvailableFilters, getArticlesByLabel, getStarredArticles, getTodayInShanghai } from './services/api';
 // import ArticlePreviewModal from './components/ArticlePreviewModal';
 import ArticleDetail from './components/ArticleDetail';
@@ -22,6 +22,7 @@ const App: React.FC = () => {
     const [dates, setDates] = useState<string[]>([]); // Re-introduced
     const [activeFilter, setActiveFilter] = useState<Filter | null>(null);
     const [availableFilters, setAvailableFilters] = useState<AvailableFilters>({ categories: [], tags: [] });
+    const [availableTags, setAvailableTags] = useState<Tag[]>([]); // For TagPopover
     const [selectedMonth, setSelectedMonth] = useState<string>(''); // Re-introduced
 
     const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
@@ -50,22 +51,28 @@ const App: React.FC = () => {
             try {
                 // Fetch with optional time slot override for immediate state updates
                 const fetchedReports = await getBriefingReportsByDate(filter.value, slotOverride || undefined);
-                const articles = fetchedReports.flatMap(report => report.articles);
-                const articleIds = articles.map(article => article.id);
+                
+                // New logic to handle GroupedArticles
+                const allArticles = fetchedReports.flatMap(report => Object.values(report.articles).flat());
+                const articleIds = allArticles.map(article => article.id);
 
                 if (articleIds.length > 0) {
                     const states = await getArticleStates(articleIds);
                     const reportsWithState = fetchedReports.map(report => ({
                         ...report,
-                        articles: report.articles.map(article => ({
-                            ...article,
-                            tags: states[article.id] || []
-                        }))
+                        articles: Object.entries(report.articles).reduce((acc, [importance, articles]) => {
+                            acc[importance] = articles.map(article => ({
+                                ...article,
+                                tags: states[article.id] || []
+                            }));
+                            return acc;
+                        }, {} as typeof report.articles)
                     }));
                     setReports(reportsWithState as BriefingReport[]);
                 } else {
                     setReports(fetchedReports as BriefingReport[]);
                 }
+
                 if (fetchedReports.length > 0) {
                     setSelectedReportId(fetchedReports[0].id);
                 }
@@ -120,6 +127,13 @@ const App: React.FC = () => {
                 const sortedDates = availableDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
                 setDates(sortedDates);
                 setAvailableFilters(filters);
+                
+                // Transform tags for TagPopover
+                const transformedTags = filters.tags.map(tag => ({
+                    id: `user/1000/label/${tag}`,
+                    label: tag
+                }));
+                setAvailableTags(transformedTags);
                 
                 if (sortedDates.length > 0) {
                     const latestDate = sortedDates[0];
@@ -227,13 +241,19 @@ const App: React.FC = () => {
     };
     
     const handleArticleStateChange = async (articleId: string | number, newTags: string[]) => {
-        // This function needs to handle state updates for both reports and filteredArticles
-        // depending on which view is active or if the article exists in both.
-        // For simplicity, we'll update both if the article is found.
+        const updateArticleTagsInGroups = (groups: GroupedArticles, id: string | number, tags: string[]) => {
+            const newGroups = { ...groups };
+            for (const importance in newGroups) {
+                newGroups[importance] = newGroups[importance].map(article =>
+                    article.id === id ? { ...article, tags } : article
+                );
+            }
+            return newGroups;
+        };
 
-        const updateArticleTags = (articles: Article[], id: string | number, tags: string[]) => {
-            return articles.map(article => 
-                article.id === id ? { ...article, tags: tags } : article
+        const updateArticleTagsInList = (articles: Article[], id: string | number, tags: string[]) => {
+            return articles.map(article =>
+                article.id === id ? { ...article, tags } : article
             );
         };
 
@@ -242,14 +262,15 @@ const App: React.FC = () => {
 
         setReports(prevReports => prevReports.map(report => ({
             ...report,
-            articles: updateArticleTags(report.articles, articleId, newTags)
+            articles: updateArticleTagsInGroups(report.articles, articleId, newTags)
         })));
-        setFilteredArticles(prevArticles => updateArticleTags(prevArticles, articleId, newTags));
+        setFilteredArticles(prevArticles => updateArticleTagsInList(prevArticles, articleId, newTags));
 
         try {
-            // Find the original article from either source to compare tags
-            const originalArticle = originalReports.flatMap(r => r.articles).find(a => a.id === articleId) ||
-                                    originalFilteredArticles.find(a => a.id === articleId);
+            const originalArticle = originalReports
+                .flatMap(r => Object.values(r.articles).flat())
+                .find(a => a.id === articleId) ||
+                originalFilteredArticles.find(a => a.id === articleId);
 
             const originalTags: string[] = originalArticle?.tags || [];
             
@@ -350,6 +371,7 @@ const App: React.FC = () => {
                         activeFilter={activeFilter}
                         timeSlot={timeSlot}
                         selectedReportId={selectedReportId}
+                        availableTags={availableTags}
                         onReportSelect={setSelectedReportId}
                         onReaderModeRequest={handleOpenReader}
                         onStateChange={handleArticleStateChange}

@@ -63,19 +63,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(200).json([]);
         }
 
-        // Deduplicate by id, then sort by crawlTime descending
+        // Deduplicate by id
         const uniqueById = new Map<string | number, Article>();
         data.forEach((a) => {
             uniqueById.set(a.id, a);
         });
         const deduped = Array.from(uniqueById.values());
-        const sortedArticles = deduped.sort((a: Article, b: Article) => {
-            const aTime = new Date(a.crawlTime || a.published).getTime();
-            const bTime = new Date(b.crawlTime || b.published).getTime();
-            return bTime - aTime;
+
+        // Group articles by importance and sort by score within each group
+        const groupedArticles: { [key: string]: Article[] } = {
+            '重要新闻': [],
+            '必知要闻': [],
+            '常规更新': [],
+        };
+
+        deduped.forEach(article => {
+            const importance = article.verdict?.importance || '常规更新';
+            if (groupedArticles[importance]) {
+                groupedArticles[importance].push(article);
+            } else {
+                groupedArticles['常规更新'].push(article); // Fallback for unknown importance
+            }
         });
 
-        return res.status(200).json(sortedArticles);
+        // Sort articles within each group by score descending
+        for (const importance in groupedArticles) {
+            groupedArticles[importance].sort((a, b) => {
+                const scoreA = a.verdict?.score || 0;
+                const scoreB = b.verdict?.score || 0;
+                return scoreB - scoreA;
+            });
+        }
+
+        return res.status(200).json(groupedArticles);
 
     } catch (error: any) {
         console.error('Handler error:', error);

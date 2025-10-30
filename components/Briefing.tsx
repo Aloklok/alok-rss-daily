@@ -83,32 +83,16 @@ const Callout: React.FC<CalloutProps> = ({ title, content }) => {
 
 interface TagPopoverProps {
     article: Article;
+    availableTags: Tag[];
     onClose: () => void;
     onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
 }
 
-const TagPopover: React.FC<TagPopoverProps> = ({ article, onClose, onStateChange }) => {
-    const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose, onStateChange }) => {
     const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set(article.tags?.filter(t => !t.startsWith('user/-/state')) || []));
-    const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     
     const popoverRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const fetchTags = async () => {
-            setIsLoading(true);
-            try {
-                const tags = await getTags();
-                setAvailableTags(tags);
-            } catch (error) {
-                console.error("Failed to fetch tags", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchTags();
-    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -154,8 +138,8 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, onClose, onStateChange
             <div className="p-4 border-b">
                 <h4 className="font-semibold text-gray-800">编辑标签</h4>
             </div>
-            {isLoading ? (
-                <div className="p-4 text-center text-gray-500">加载中...</div>
+            {availableTags.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">暂无可用标签。</div>
             ) : (
                 <div className="p-4 max-h-60 overflow-y-auto">
                     <div className="space-y-3">
@@ -177,7 +161,7 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, onClose, onStateChange
                 <button onClick={onClose} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
                 <button 
                     onClick={handleConfirm}
-                    disabled={isSaving || isLoading}
+                    disabled={isSaving}
                     className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:bg-blue-300"
                 >
                     {isSaving ? '保存中...' : '确认'}
@@ -209,11 +193,12 @@ const IconCircle = () => (
 
 interface ActionButtonsProps {
     article: Article;
+    availableTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
-    onStateChange: (articleId: string | number, action: 'star' | 'read', isAdding: boolean) => Promise<void>;
+    onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
 }
 
-const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequest, onStateChange }) => {
+const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableTags, onReaderModeRequest, onStateChange }) => {
     const STAR_TAG = 'user/-/state/com.google/starred';
     const READ_TAG = 'user/-/state/com.google/read';
 
@@ -240,12 +225,6 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
         } finally {
             setIsLoading(null);
         }
-    };
-
-    const handleTagsUpdated = async (articleId: string | number, newTags: string[]) => {
-        // This function is a placeholder to satisfy the TagPopover's prop requirement.
-        // The actual tag update logic should be handled at a higher level, likely in App.tsx.
-        console.log("Tags updated for", articleId, newTags);
     };
 
     const actionButtonClass = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 transform hover:scale-105 disabled:scale-100 disabled:cursor-wait disabled:opacity-75";
@@ -281,7 +260,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                             标签
                         </button>
-                        {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={handleTagsUpdated} />}
+                        {isTagPopoverOpen && <TagPopover article={article} availableTags={availableTags} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
                          {userTags.length > 0 && (
                             <div className="hidden md:flex flex-wrap gap-2 items-center">
                                 <div className="border-l border-stone-300 h-6 mx-1"></div>
@@ -327,7 +306,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                         <span>标签</span>
                     </button>
-                    {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={handleTagsUpdated} />}
+                    {isTagPopoverOpen && <TagPopover article={article} availableTags={availableTags} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
                 </div>
                 <div className="flex justify-end mt-4">
                     <a href={article.link} target="_blank" rel="noopener noreferrer" className={`${mobileActionButtonClass} text-stone-600 bg-stone-100`}>
@@ -343,11 +322,12 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, onReaderModeRequ
 
 interface ArticleCardProps {
   article: Article;
+  availableTags: Tag[];
   onReaderModeRequest: (article: Article) => void;
   onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
 }
 
-const ArticleCard: React.FC<ArticleCardProps> = ({ article, onReaderModeRequest, onStateChange }) => {
+const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableTags, onReaderModeRequest, onStateChange }) => {
   const publishedDate = new Date(article.published).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
   
   const allKeywords = [article.category, ...article.keywords];
@@ -394,37 +374,34 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, onReaderModeRequest,
         <Callout title="市场观察" content={article.marketTake} />
       </div>
 
-      <ActionButtons article={article} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />
+      <ActionButtons article={article} availableTags={availableTags} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />
     </article>
   );
 };
 
 interface ReportContentProps {
     report: BriefingReport;
+    availableTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
 }
 
-const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeRequest, onStateChange }) => {
-    const sectionMap = useMemo(() => {
-        const map = new Map<string, Article[]>();
-        report.articles.forEach(article => {
-            if (!map.has(article.briefingSection)) {
-                map.set(article.briefingSection, []);
-            }
-            map.get(article.briefingSection)!.push(article);
-        });
-        return map;
-    }, [report]);
+const ReportContent: React.FC<ReportContentProps> = ({ report, availableTags, onReaderModeRequest, onStateChange }) => {
+    const importanceOrder = ['重要新闻', '必知要闻', '常规更新'];
+    const importanceStyles: { [key: string]: { emoji: string; bg: string; text: string; border: string } } = {
+        '重要新闻': { emoji: '🚨', bg: 'bg-rose-50', text: 'text-rose-800', border: 'border-rose-200' },
+        '必知要闻': { emoji: '🔥', bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
+        '常规更新': { emoji: '📰', bg: 'bg-sky-50', text: 'text-sky-800', border: 'border-sky-200' },
+    };
 
     const handleJump = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
         e.preventDefault();
         const element = document.getElementById(targetId);
         if (element) {
-           element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
-    
+
     const DecorativeDivider = () => (
         <div className="flex items-center justify-center my-8">
             <span className="h-px w-20 bg-stone-200"></span>
@@ -433,8 +410,19 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeReque
         </div>
     );
 
+    const allArticlesCount = Object.values(report.articles).reduce((acc, articles) => acc + articles.length, 0);
+
+    if (allArticlesCount === 0) {
+        return (
+            <div className="text-center py-20">
+                <p className="text-2xl font-semibold text-stone-600">此时间段内暂无文章。</p>
+            </div>
+        );
+    }
+
     return (
         <div>
+            {/* Table of Contents & Summary Section */}
             <div className="bg-white/70 backdrop-blur-md p-6 rounded-2xl border border-stone-200/80 shadow-sm mb-10">
                 <div className="md:hidden">
                     <h3 className="text-2xl font-bold font-serif text-stone-800 flex items-center">
@@ -447,59 +435,76 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeReque
                     <h3 className="text-2xl font-bold font-serif text-stone-800">📚 目录</h3>
                     <h3 className="text-2xl font-bold font-serif text-stone-800">📝 摘要</h3>
                 </div>
-                
-                <div className="mt-3">
-                    {Array.from(sectionMap.entries()).map(([sectionTitle, articles]) => (
-                        <div key={sectionTitle}>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 border-b-2 border-stone-200 my-2 pb-2">
-                                <div className="py-2">
-                                    <h4 className="font-semibold text-stone-800 text-base">{sectionTitle}</h4>
-                                </div>
-                                <div className="hidden md:block py-2"></div>
-                            </div>
-                            {articles.map(article => (
-                                <div key={article.id}>
-                                    <div className="md:hidden py-3">
-                                        <a 
-                                            href={`#article-${article.id}`} 
-                                            onClick={(e) => handleJump(e, `article-${article.id}`)} 
-                                            className="text-sky-600 hover:text-sky-800 font-medium leading-tight"
-                                        >
-                                            {article.title}
-                                        </a>
-                                        <p className="mt-2 text-base text-stone-600 leading-relaxed">
-                                            {article.tldr}
-                                        </p>
-                                    </div>
 
-                                    <div className="hidden md:grid grid-cols-2 gap-x-6">
-                                        <div className="py-2 flex items-start">
-                                            <a 
-                                                href={`#article-${article.id}`} 
-                                                onClick={(e) => handleJump(e, `article-${article.id}`)} 
-                                                className="text-sky-600 hover:text-sky-800 hover:underline font-medium leading-tight decoration-sky-300 decoration-2"
-                                            >
+                <div className="mt-3">
+                    {importanceOrder.map(importance => {
+                        const articles = report.articles[importance];
+                        if (!articles || articles.length === 0) return null;
+
+                        const sectionId = `importance-${importance.replace(/\s+/g, '-')}`;
+                        const styles = importanceStyles[importance];
+
+                        return (
+                            <div key={importance}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 border-b-2 border-stone-200 my-2 pb-2">
+                                    <div className="py-2">
+                                        <a href={`#${sectionId}`} onClick={(e) => handleJump(e, sectionId)} className={`font-semibold text-base ${styles.text} hover:underline`}>
+                                            <span className="mr-2">{styles.emoji}</span>
+                                            {importance}
+                                        </a>
+                                    </div>
+                                    <div className="hidden md:block py-2"></div>
+                                </div>
+                                {articles.map(article => (
+                                    <div key={article.id}>
+                                        <div className="md:hidden py-3">
+                                            <a href={`#article-${article.id}`} onClick={(e) => handleJump(e, `article-${article.id}`)} className="text-sky-600 hover:text-sky-800 font-medium leading-tight">
                                                 {article.title}
                                             </a>
+                                            <p className="mt-2 text-base text-stone-600 leading-relaxed">{article.tldr}</p>
                                         </div>
-                                        <div className="py-2 text-base text-stone-600 leading-relaxed flex items-start">
-                                            {article.tldr}
+                                        <div className="hidden md:grid grid-cols-2 gap-x-6">
+                                            <div className="py-2 flex items-start">
+                                                <a href={`#article-${article.id}`} onClick={(e) => handleJump(e, `article-${article.id}`)} className="text-sky-600 hover:text-sky-800 hover:underline font-medium leading-tight decoration-sky-300 decoration-2">
+                                                    {article.title}
+                                                </a>
+                                            </div>
+                                            <div className="py-2 text-base text-stone-600 leading-relaxed flex items-start">{article.tldr}</div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    ))}
+                                ))}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 
-            <div className="space-y-4">
-                {report.articles.map((article, index) => (
-                   <div key={article.id} id={`article-${article.id}`} className="scroll-mt-24">
-                     <ArticleCard article={article} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />
-                     {index < report.articles.length - 1 && <DecorativeDivider />}
-                   </div>
-                ))}
+            {/* Articles Section */}
+            <div className="">
+                {importanceOrder.map(importance => {
+                    const articles = report.articles[importance];
+                    if (!articles || articles.length === 0) return null;
+
+                    const sectionId = `importance-${importance.replace(/\s+/g, '-')}`;
+                    const styles = importanceStyles[importance];
+
+                    return (
+                        <section key={importance} id={sectionId} className="scroll-mt-20">
+                            <h2 className={`flex items-center gap-x-3 text-3xl font-bold font-serif p-4 rounded-lg ${styles.bg} ${styles.text} border-l-4 ${styles.border}`}>
+                                <span>{styles.emoji}</span>
+                                {importance}
+                            </h2>
+                            <div className="mt-0">
+                                {articles.map((article, index) => (
+                                    <div key={article.id} id={`article-${article.id}`} className="scroll-mt-24">
+                                        <ArticleCard article={article} availableTags={availableTags} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />
+                                        {index < articles.length - 1 && <DecorativeDivider />}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    );
+                })}
             </div>
         </div>
     );
@@ -511,6 +516,7 @@ interface BriefingProps {
   activeFilter: Filter | null;
   timeSlot: 'morning' | 'afternoon' | 'evening' | null;
   selectedReportId: number | null;
+  availableTags: Tag[];
   onReportSelect: (id: number) => void;
   onReaderModeRequest: (article: Article) => void;
   onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
@@ -526,7 +532,7 @@ const GRADIENTS = [
     'from-lime-400 via-emerald-500 to-cyan-500'
 ];
 
-const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, selectedReportId, onReportSelect, onReaderModeRequest, onStateChange, onResetFilter, onTimeSlotChange }) => {
+const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, selectedReportId, availableTags, onReportSelect, onReaderModeRequest, onStateChange, onResetFilter, onTimeSlotChange }) => {
   const selectedReport = reports.find(r => r.id === selectedReportId);
 
   const randomGradient = useMemo(() => {
@@ -667,6 +673,7 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
                 {selectedReport ? (
                     <ReportContent 
                         report={selectedReport} 
+                        availableTags={availableTags}
                         onReaderModeRequest={onReaderModeRequest}
                         onStateChange={onStateChange}
                     />
