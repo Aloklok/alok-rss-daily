@@ -16,14 +16,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // We use a raw query here because it's more efficient to let PostgreSQL handle
         // the date extraction and distinct filtering.
         // The query does the following:
-        // 1. CAST(crawlTime AS DATE): Converts the full timestamp into just a date (e.g., '2025-10-28').
+        // 1. CAST(n8n_processing_date AS DATE): Converts the full timestamp into just a date (e.g., '2025-10-28').
         // 2. AS article_date: Gives the resulting date column a name.
         // 3. DISTINCT ON (article_date): Selects only the unique dates.
         // 4. ORDER BY article_date DESC: Sorts the unique dates from newest to oldest.
         const { data, error } = await supabase
             .from('articles')
-            .select('crawlTime')
-            .order('crawlTime', { ascending: false });
+            .select('n8n_processing_date')
+            .order('n8n_processing_date', { ascending: false });
 
         if (error) {
             console.error('Supabase error in get-available-dates:', error);
@@ -42,8 +42,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
 
             data.forEach(item => {
-                if (item.crawlTime) {
-                    const date = new Date(item.crawlTime);
+                if (item.n8n_processing_date) {
+                    const date = new Date(item.n8n_processing_date);
                     // Format the date according to Shanghai's timezone
                     dateSet.add(formatter.format(date));
                 }

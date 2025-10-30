@@ -42,8 +42,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const { data: chunk, error: err } = await supabase
                 .from('articles')
                 .select('*')
-                .gte('crawlTime', r.start)
-                .lte('crawlTime', r.end);
+                .gte('n8n_processing_date', r.start)
+                .lte('n8n_processing_date', r.end);
             
             if (err) {
                 error = err;

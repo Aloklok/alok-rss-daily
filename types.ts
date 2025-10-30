@@ -16,7 +16,7 @@ export interface Article {
   link: string;
   sourceName: string;
   published: string;
-  crawlTime?: string; // time when the crawler fetched the article
+  n8n_processing_date?: string; // time when n8n processed the article
   category: string;
   briefingSection: string;
   keywords: string[];

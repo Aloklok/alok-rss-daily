@@ -29,6 +29,7 @@ const App: React.FC = () => {
     const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
     
     const [isMarkingAsRead, setIsMarkingAsRead] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false); // 添加用于更新目录按钮的刷新状态
     
     const [readerContent, setReaderContent] = useState<CleanArticleContent | null>(null);
     const [isReaderLoading, setIsReaderLoading] = useState(false);
@@ -38,6 +39,29 @@ const App: React.FC = () => {
     const [sidebarArticle, setSidebarArticle] = useState<Article | null>(null);
 
     const mainContentRef = useRef<HTMLDivElement | null>(null);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+    const [isMdUp, setIsMdUp] = useState<boolean>(false);
+
+    // 根据设备宽度设置侧栏默认折叠状态：移动端默认折叠，桌面端默认展开
+    useEffect(() => {
+        try {
+            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768; // md 断点
+            setIsSidebarCollapsed(isMobile);
+        } catch {}
+    }, []);
+
+    // 跟踪 md 及以上视口，用于将按钮精确定位在侧栏外的右上角
+    useEffect(() => {
+        const updateViewport = () => {
+            try {
+                const mdUp = typeof window !== 'undefined' && window.innerWidth >= 768;
+                setIsMdUp(mdUp);
+            } catch {}
+        };
+        updateViewport();
+        window.addEventListener('resize', updateViewport);
+        return () => window.removeEventListener('resize', updateViewport);
+    }, []);
 
     const fetchData = useCallback(async (filter: Filter, slotOverride?: 'morning' | 'afternoon' | 'evening' | null) => {
         if (!filter) return;
@@ -313,11 +337,8 @@ const App: React.FC = () => {
     };
 
     const handleScrollToTop = () => {
-        if (window.innerWidth < 768) {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-            mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+        // 使用页面滚动而不是内部容器滚动，避免出现页面中间的滚动条
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleOpenReader = useCallback(async (article: Article) => {
@@ -346,21 +367,80 @@ const App: React.FC = () => {
     //     setPreviewUrl(url);
     // };
 
+    // 侧栏宽度变量：仅在 md+ 且未折叠时为 320px，否则为 0px
+    const sidebarWidthVar = isMdUp && !isSidebarCollapsed ? '320px' : '0px';
+
     return (
-        <div className="flex flex-col md:flex-row h-screen font-sans">
-            <Sidebar 
-                dates={datesForMonth} // Re-introduced
-                isLoading={isLoading}
-                availableMonths={availableMonths} // Re-introduced
-                selectedMonth={selectedMonth} // Re-introduced
-                onMonthChange={setSelectedMonth} // Re-introduced
-                availableFilters={availableFilters}
-                activeFilter={activeFilter}
-                onFilterChange={handleFilterChange}
-                onOpenArticle={handleShowArticleInMain}
-                onRefresh={refreshSidebar}
-            />
-            <div ref={mainContentRef} className="flex-1 overflow-y-auto relative bg-stone-50">
+        <div className="flex flex-col md:flex-row min-h-screen font-sans" style={{ '--sidebar-width': sidebarWidthVar } as React.CSSProperties}>
+            {/* 侧栏容器，带折叠动画 */}
+            <div
+                className={`relative transition-all duration-300 ease-in-out overflow-hidden ${
+                    isSidebarCollapsed ? 'md:w-0 w-0 transform -translate-x-full opacity-0 pointer-events-none' : 'md:w-80 w-full transform translate-x-0 opacity-100'
+                }`}
+            >
+                <Sidebar 
+                    dates={datesForMonth} // Re-introduced
+                    isLoading={isLoading}
+                    availableMonths={availableMonths} // Re-introduced
+                    selectedMonth={selectedMonth} // Re-introduced
+                    onMonthChange={setSelectedMonth} // Re-introduced
+                    availableFilters={availableFilters}
+                    activeFilter={activeFilter}
+                    onFilterChange={handleFilterChange}
+                    onOpenArticle={handleShowArticleInMain}
+                    onRefresh={refreshSidebar}
+                />
+            </div>
+
+            {/* 折叠/展开按钮：固定定位在“侧栏外右上角”，md+ 生效；移动端固定左上角 */}
+            <button
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className="fixed p-2 bg-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out border border-gray-200 hover:border-gray-300"
+                style={{
+                    top: '12px',
+                    left: isMdUp ? 'calc(var(--sidebar-width) + 12px)' : '12px',
+                    zIndex: 50
+                }}
+            >
+                {isSidebarCollapsed ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-800 transition-transform duration-300 hover:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-800 transition-transform duration-300 hover:rotate-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="2" />
+                        <path d="M9 4v16" strokeWidth="2" />
+                    </svg>
+                )}
+            </button>
+
+            {/* 更新目录按钮：固定定位在折叠按钮下方 */}
+            <button
+                onClick={refreshSidebar}
+                disabled={isRefreshing}
+                className="fixed flex flex-col items-center justify-center gap-1 px-2 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-sm text-white hover:from-blue-600 hover:to-indigo-700 focus:outline-none shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+                style={{
+                    top: '52px', // 折叠按钮高度约40px + 12px间距
+                    left: isMdUp ? 'calc(var(--sidebar-width) + 12px)' : '12px',
+                    zIndex: 50
+                }}
+            >
+                <div className="flex flex-col items-center justify-center">
+                    {isRefreshing ? (
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                    ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M4 4v5h.582A7 7 0 1011 18.418V17a1 1 0 112 0v3a1 1 0 01-1 1H6a1 1 0 01-1-1V17a1 1 0 112 0v1.418A7 7 0 104.582 9H4z" />
+                        </svg>
+                    )}
+                    <span className="mt-1" style={{ writingMode: 'vertical-lr', textOrientation: 'mixed' }}>{isRefreshing ? '正在更新' : '更新目录'}</span>
+                </div>
+            </button>
+
+            <div ref={mainContentRef} className="flex-1 bg-stone-50 w-full max-w-4xl mx-auto px-4 md:px-8">
                 {isLoading ? (
                     <LoadingSpinner />
                 ) : sidebarArticle ? (

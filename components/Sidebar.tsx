@@ -246,7 +246,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     );
 
     return (
-        <aside className="flex flex-col flex-shrink-0 bg-gray-50 border-r border-gray-200 w-full md:w-80 p-4 space-y-4">
+        <aside className="flex flex-col flex-shrink-0 bg-gray-50 border-r border-gray-200 w-full md:w-80 p-4 space-y-4 relative">
             <h1 className="text-2xl font-bold text-gray-900 px-1">Briefing Hub</h1>
             
             <div className="flex items-center gap-2 p-1 bg-gray-200 rounded-lg">
@@ -261,27 +261,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <span>📅</span>
                         <span>日历</span>
                     </div>
-                </button>
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-                <div />
-                <button
-                    onClick={handleRefreshClick}
-                    disabled={isRefreshing}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-md text-sm text-gray-700 hover:bg-gray-200 focus:outline-none"
-                >
-                    {isRefreshing ? (
-                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                        </svg>
-                    ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M4 4v5h.582A7 7 0 1011 18.418V17a1 1 0 112 0v3a1 1 0 01-1 1H6a1 1 0 01-1-1V17a1 1 0 112 0v1.418A7 7 0 104.582 9H4z" />
-                        </svg>
-                    )}
-                    <span>{isRefreshing ? '正在更新' : '更新目录'}</span>
                 </button>
             </div>
 
