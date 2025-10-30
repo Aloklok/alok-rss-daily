@@ -125,7 +125,8 @@ export const getArticleStates = async (articleIds: (string | number)[]): Promise
 
 export const editArticleState = async (articleId: string | number, action: 'star' | 'read', isAdding: boolean): Promise<void> => {
     try {
-        const response = await fetch('/api/edit-article-state', {
+        // Use the unified update-state API which supports both state changes and custom tags
+        const response = await fetch('/api/update-state', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -153,9 +154,80 @@ export const getTags = async (): Promise<Tag[]> => {
 };
 
 export const editArticleTag = async (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]): Promise<void> => {
-    // This function would ideally update Supabase or FreshRSS, but for now, it's a placeholder.
-    await sleep(500);
-    console.log(`Updating tags for ${articleId} (placeholder): add [${tagsToAdd.join(', ')}] remove [${tagsToRemove.join(', ')}]`);
+    try {
+        // tagsToAdd and tagsToRemove are already in full format (e.g., 'user/1000/label/AI')
+        // Convert them to the FreshRSS format: 'user/-/label/{name}'
+        const formatTag = (tag: string): string => {
+            // If already in proper format, just replace user ID with user/-
+            if (tag.startsWith('user/')) {
+                return tag.replace(/^user\/\d+\//, 'user/-/');
+            }
+            // If it's just a label name, add the full prefix
+            return `user/-/label/${encodeURIComponent(tag)}`;
+        };
+        
+        const formattedTagsToAdd = tagsToAdd.map(formatTag);
+        const formattedTagsToRemove = tagsToRemove.map(formatTag);
+        
+        const response = await fetch('/api/update-state', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                articleId,
+                tagsToAdd: formattedTagsToAdd,
+                tagsToRemove: formattedTagsToRemove
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to update article tags');
+        }
+        
+        console.log(`Successfully updated tags for ${articleId}: add [${tagsToAdd.join(', ')}] remove [${tagsToRemove.join(', ')}]`);
+        
+        // 显示成功提示
+        if (typeof window !== 'undefined' && (tagsToAdd.length > 0 || tagsToRemove.length > 0)) {
+            // Extract tag labels from full tag IDs (e.g., 'user/1000/label/AI' -> 'AI')
+            const extractLabel = (tag: string) => {
+                const parts = tag.split('/');
+                return parts[parts.length - 1] || tag;
+            };
+            
+            const addedLabels = tagsToAdd.map(extractLabel).join(', ');
+            const removedLabels = tagsToRemove.map(extractLabel).join(', ');
+            
+            const message = tagsToAdd.length > 0 
+                ? `成功添加标签: ${addedLabels}` 
+                : `成功移除标签: ${removedLabels}`;
+            
+            // 使用简单的提示或现有的通知系统
+            const toast = document.createElement('div');
+            toast.textContent = message;
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.right = '20px';
+            toast.style.backgroundColor = '#4CAF50';
+            toast.style.color = 'white';
+            toast.style.padding = '10px 20px';
+            toast.style.borderRadius = '4px';
+            toast.style.zIndex = '1000';
+            toast.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+            document.body.appendChild(toast);
+            
+            // 3秒后自动消失
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.5s';
+                setTimeout(() => document.body.removeChild(toast), 500);
+            }, 3000);
+        }
+    } catch (error) {
+        console.error(`Failed to edit article tags for ${articleId}:`, error);
+        throw error;
+    }
 };
 
 export const getArticlesByLabel = async (filter: Filter): Promise<Article[]> => {

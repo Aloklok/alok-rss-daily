@@ -19,11 +19,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
+        // Step 1: Fetch the short-lived action token from FreshRSS
+        const tokenResponse = await fetch(`${GREADER_API_URL}/greader.php/reader/api/0/token`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,
+            },
+        });
+
+        if (!tokenResponse.ok) {
+            const errorText = await tokenResponse.text();
+            throw new Error(`Failed to fetch action token. Status: ${tokenResponse.status}. Response: ${errorText}`);
+        }
+
+        const shortLivedToken = await tokenResponse.text();
+
+        // Step 2: Use the short-lived token to perform the edit-tag action
         const apiPath = `${GREADER_API_URL}/greader.php/reader/api/0/edit-tag`;
         
         const params = new URLSearchParams();
         params.append('i', String(articleId)); // 'i' is the item ID parameter for GReader API
-        params.append('T', AUTH_TOKEN); // Pass the token as a parameter
+        params.append('T', shortLivedToken.trim()); // Pass the short-lived token
 
         if (action) { // Handle star/read
             const tagMap = {
@@ -45,12 +61,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const response = await fetch(apiPath, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params,
+            headers: { 
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,
+            },
+            body: params.toString(),
         });
 
         const responseText = await response.text();
-        if (!response.ok || responseText !== 'OK') {
+        if (!response.ok || responseText.trim() !== 'OK') {
              throw new Error(`Failed to update state. Status: ${response.status}. Response: ${responseText}`);
         }
 

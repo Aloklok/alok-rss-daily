@@ -94,17 +94,18 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose
     
     const popoverRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-                onClose();
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [onClose]);
+    // 移除外部点击关闭的处理，改为只通过按钮关闭
+    // useEffect(() => {
+    //     const handleClickOutside = (event: MouseEvent) => {
+    //         if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+    //             onClose();
+    //         }
+    //     };
+    //     document.addEventListener('mousedown', handleClickOutside);
+    //     return () => {
+    //         document.removeEventListener('mousedown', handleClickOutside);
+    //     };
+    // }, [onClose]);
 
     const handleTagChange = (tagId: string) => {
         setSelectedTags(prev => {
@@ -134,7 +135,11 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose
     };
     
     return (
-        <div ref={popoverRef} className="absolute bottom-full mb-2 w-64 bg-white rounded-lg shadow-2xl border border-gray-200 z-10 right-0 md:left-1/2 md:-translate-x-1/2">
+        <div 
+            ref={popoverRef} 
+            className="absolute bottom-full mb-2 w-64 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 right-0 md:left-1/2 md:-translate-x-1/2"
+            onClick={(e) => e.stopPropagation()} // 阻止事件冒泡
+        >
             <div className="p-4 border-b">
                 <h4 className="font-semibold text-gray-800">编辑标签</h4>
             </div>
@@ -144,23 +149,48 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose
                 <div className="p-4 max-h-60 overflow-y-auto">
                     <div className="space-y-3">
                         {availableTags.map(tag => (
-                            <label key={tag.id} className="flex items-center space-x-3 cursor-pointer">
+                            <label 
+                                key={tag.id} 
+                                className="flex items-center space-x-3 cursor-pointer"
+                            >
                                 <input
                                     type="checkbox"
                                     checked={selectedTags.has(tag.id)}
-                                    onChange={() => handleTagChange(tag.id)}
+                                    onChange={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleTagChange(tag.id);
+                                    }}
                                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                 />
-                                <span className="text-gray-700">{tag.label}</span>
+                                <span 
+                                    className="text-gray-700"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleTagChange(tag.id);
+                                    }}
+                                >{tag.label}</span>
                             </label>
                         ))}
                     </div>
                 </div>
             )}
             <div className="p-3 bg-gray-50 flex justify-end space-x-2 rounded-b-lg">
-                <button onClick={onClose} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
                 <button 
-                    onClick={handleConfirm}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClose();
+                    }} 
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                    取消
+                </button>
+                <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleConfirm();
+                    }}
                     disabled={isSaving}
                     className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:bg-blue-300"
                 >
@@ -256,12 +286,45 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableTags, o
                             {isLoading === 'read' ? <SpinnerIcon /> : (isRead ? <IconCheckCircle /> : <IconCircle />)}
                             {isRead ? '已读' : '标记已读'}
                         </button>
-                         <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className={`${actionButtonClass} bg-sky-200 hover:bg-sky-300 text-sky-900`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
-                            标签
-                        </button>
-                        {isTagPopoverOpen && <TagPopover article={article} availableTags={availableTags} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
-                         {userTags.length > 0 && (
+                         <div className="relative" onClick={(e) => e.stopPropagation()}>
+                            <button 
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setIsTagPopoverOpen(prev => !prev);
+                                }} 
+                                className={`${actionButtonClass} bg-sky-200 hover:bg-sky-300 text-sky-900`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                                标签
+                            </button>
+                            {isTagPopoverOpen && (
+                                <div className="fixed inset-0 z-40" onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setIsTagPopoverOpen(false);
+                                }}>
+                                    <div className="absolute z-50 bottom-auto right-auto" 
+                                        style={{
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)'
+                                        }}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                        }}>
+                                        <TagPopover 
+                                            article={article} 
+                                            availableTags={availableTags} 
+                                            onClose={() => setIsTagPopoverOpen(false)} 
+                                            onStateChange={onStateChange} 
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        {userTags.length > 0 && (
                             <div className="hidden md:flex flex-wrap gap-2 items-center">
                                 <div className="border-l border-stone-300 h-6 mx-1"></div>
                                 {userTags.map(tag => (
