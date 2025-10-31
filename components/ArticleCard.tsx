@@ -91,7 +91,7 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose
 
     const handleConfirm = async () => {
         setIsSaving(true);
-        const stateTags = article.tags?.filter(t => t.startsWith('user/-/state')) || [];
+        const stateTags = (article.tags || []).filter(t => t && t.startsWith('user/-/state'));
         const newTags = [...stateTags, ...Array.from(selectedTags)];
         try {
             await onStateChange(article.id, newTags);

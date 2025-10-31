@@ -145,8 +145,11 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
 
   const getGreeting = () => {
       const hour = new Date().getHours();
-      if (hour < 12) return '早上好';
-      if (hour < 18) return '中午好';
+      if (hour >= 0 && hour < 5) return '凌晨好';
+      if (hour >= 5 && hour < 12) return '早上好';
+      if (hour >= 12 && hour < 14) return '中午好';
+      if (hour >= 14 && hour < 18) return '下午好';
+      if (hour >= 18 && hour < 22) return '傍晚好';
       return '晚上好';
   }
 
@@ -155,6 +158,16 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
           const dateObj = new Date(activeFilter.value + 'T00:00:00');
           const datePart = dateObj.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
           const weekdayPart = dateObj.toLocaleDateString('zh-CN', { weekday: 'long' });
+
+          const now = new Date();
+          const currentHour = now.getHours();
+
+          const getCurrentTimeSlot = () => {
+              if (currentHour >= 0 && currentHour < 12) return 'morning';
+              if (currentHour >= 12 && currentHour < 19) return 'afternoon';
+              return 'evening';
+          };
+          const autoSelectedSlot = isToday ? getCurrentTimeSlot() : null;
 
           return (
              <header className={`mb-12 bg-gradient-to-br ${randomGradient} rounded-2xl p-8 text-white shadow-lg`}>
@@ -185,18 +198,18 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
                     {activeFilter?.type === 'date' && (
                          <div className="mt-6 md:mt-0 flex-shrink-0 flex items-center gap-2">
                             <div className="bg-black/10 p-1.5 rounded-full flex gap-1">
-                                {(['morning','afternoon','evening'] as const).map(slot => {
-                                    const labelMap: Record<'morning'|'afternoon'|'evening', string> = { morning: '早上', afternoon: '下午', evening: '晚上' };
-                                    const isSelected = timeSlot === slot;
+                                {(['morning','afternoon','evening'] as const).map(slotOption => {
+                                    const labelMap: Record<'morning'|'afternoon'|'evening', string> = { morning: '早上', afternoon: '中午', evening: '晚上' };
+                                    const isSelected = timeSlot === slotOption || (timeSlot === null && autoSelectedSlot === slotOption);
                                     return (
                                         <button
-                                            key={slot}
-                                            onClick={() => onTimeSlotChange(isSelected ? null : slot)}
+                                            key={slotOption}
+                                            onClick={() => onTimeSlotChange(isSelected ? null : slotOption)}
                                             className={`px-4 sm:px-5 py-2 text-base font-semibold rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-white/50 ${
                                                 isSelected ? 'bg-white text-blue-600 shadow-md' : 'text-white/80 hover:bg-white/10'
                                             }`}
                                         >
-                                            {labelMap[slot]}
+                                            {labelMap[slotOption]}
                                         </button>
                                     );
                                 })}

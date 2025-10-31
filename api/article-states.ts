@@ -25,7 +25,7 @@ async function getArticleStates(req: VercelRequest, res: VercelResponse) {
         data.items.forEach((item: FreshRssItem) => {
             // FreshRSS uses 'tags' for tags in this context
            
-            const itemTags = item.tags || [];
+            const itemTags = (item.tags || []).filter(Boolean) as string[];
             // Normalize tags to include the full path expected by the frontend for user-created tags
             const normalizedTags = itemTags.map((tag: string) => {
                 if (tag.startsWith('user/-/state/')) return tag; // State tags are already in the correct format

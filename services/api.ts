@@ -69,7 +69,8 @@ const apiService = {
                 const errorData = await response.json().catch(() => ({ message: `API request failed with status ${response.status}` }));
                 throw new Error(errorData.message);
             }
-            return await response.json();
+            const result = await response.json();
+            return result;
         } catch (error) {
             console.error(`API request to ${endpoint} failed:`, error);
             showToast(error instanceof Error ? error.message : 'An unknown error occurred.', 'error');

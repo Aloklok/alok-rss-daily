@@ -21,16 +21,17 @@ export const useFilters = () => {
                 setDates(sortedDates);
                 setAvailableFilters(filters);
 
-                if (sortedDates.length > 0) {
-                    const latestDate = sortedDates[0];
-                    const initialFilter = { type: 'date' as const, value: latestDate };
+                const today = getTodayInShanghai();
+                if (today) {
+                    const initialFilter = { type: 'date' as const, value: today };
                     setActiveFilter(initialFilter);
-                    setSelectedMonth(latestDate.substring(0, 7));
+                    setSelectedMonth(today.substring(0, 7));
                 } else {
                     setActiveFilter(null);
                 }
             } catch (error) {
                 console.error("Failed to fetch initial filter data", error);
+                setActiveFilter(null); // Ensure filter is null on error
             } finally {
                 setIsInitialLoad(false);
             }

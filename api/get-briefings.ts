@@ -20,31 +20,31 @@ async function getBriefings(req: VercelRequest, res: VercelResponse) {
     const endDate = new Date(`${date}T23:59:59.999+08:00`);
 
     if (slot === 'morning') {
-        endDate.setHours(11, 59, 59, 999);
+        endDate.setHours(11, 59, 59, 999); // 0-12h
     } else if (slot === 'afternoon') {
-        startDate.setHours(12, 0, 0, 0);
-        endDate.setHours(17, 59, 59, 999);
+        startDate.setHours(12, 0, 0, 0); // 12-19h
+        endDate.setHours(18, 59, 59, 999);
     } else if (slot === 'evening') {
-        startDate.setHours(18, 0, 0, 0);
+        startDate.setHours(19, 0, 0, 0); // 19-24h
     }
 
     query = query.gte('n8n_processing_date', startDate.toISOString());
     query = query.lte('n8n_processing_date', endDate.toISOString());
 
-    const { data, error } = await query;
+    const { data: articles, error } = await query;
 
     if (error) {
-        console.error('Supabase error:', error);
-        return res.status(500).json({ message: 'Error fetching articles from Supabase', error: error.message });
+        console.error('Error fetching from Supabase:', error);
+        throw new Error(error.message);
     }
 
-    if (!data || data.length === 0) {
+    if (!articles || articles.length === 0) {
         return res.status(200).json({});
     }
 
     // Deduplicate by id
     const uniqueById = new Map<string | number, Article>();
-    data.forEach((a: any) => {
+    articles.forEach((a: any) => {
         uniqueById.set(a.id, a as Article);
     });
     const deduped = Array.from(uniqueById.values());

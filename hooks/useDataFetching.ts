@@ -47,10 +47,13 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
 
                     if (fetchedReports.length > 0) {
                         setSelectedReportId(fetchedReports[0].id);
+                    } else {
+                        setSelectedReportId(null); // Explicitly set to null if no reports
                     }
                 } catch (error) {
                     console.error(`Failed to fetch data for date filter`, error);
                     setReports([]);
+                    setSelectedReportId(null); // Ensure no report is selected on error
                 } finally {
                     setIsLoading(false);
                 }
@@ -93,8 +96,8 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
                         .find(p => p.type === 'hour')?.value;
                     const hourNum = shanghaiHour ? parseInt(shanghaiHour, 10) : new Date().getHours();
                     let autoSlot: 'morning' | 'afternoon' | 'evening' | null = null;
-                    if (hourNum >= 0 && hourNum <= 11) autoSlot = 'morning';
-                    else if (hourNum >= 12 && hourNum <= 17) autoSlot = 'afternoon';
+                    if (hourNum >= 0 && hourNum < 12) autoSlot = 'morning';
+                    else if (hourNum >= 12 && hourNum < 19) autoSlot = 'afternoon';
                     else autoSlot = 'evening';
                     setTimeSlot(autoSlot);
                     fetchData(activeFilter, autoSlot);
