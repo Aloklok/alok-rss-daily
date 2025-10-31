@@ -31,10 +31,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const shortLivedToken = await tokenResponse.text();
             return res.status(200).json({ token: shortLivedToken.trim() });
-        } catch (error) {
-            console.error('Failed to fetch short-lived token:', error);
-            return res.status(500).json({ message: 'Failed to fetch short-lived token', error: error.message });
-        }
+        } catch (error: any) {
+        console.error('Failed to fetch short-lived token:', error);
+        return res.status(500).json({ message: 'Failed to fetch short-lived token', error: error.message });
+    }
     }
 
     // Validate required parameters
