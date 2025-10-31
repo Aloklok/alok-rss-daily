@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Article, Tag } from '../types';
 
 // Helper functions and constants previously in Briefing.tsx
@@ -76,7 +76,7 @@ interface TagPopoverProps {
 }
 
 const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose, onStateChange }) => {
-    const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set(article.tags?.filter(t => !t.startsWith('user/-/state')) || []));
+    const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set(article.tags?.filter(t => !t.startsWith('user/-/state')).map(t => t.replace(/\/\d+\//, '/-/')) || []));
     const [isSaving, setIsSaving] = useState(false);
     const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -144,7 +144,9 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableTags, o
     const READ_TAG = 'user/-/state/com.google/read';
     const isStarred = article.tags?.includes(STAR_TAG) || false;
     const isRead = article.tags?.includes(READ_TAG) || false;
-    const userTags = article.tags?.filter(tag => tag.startsWith('user/1000/label/')).map(tag => tag.split('/').pop()) || [];
+    const userTags = useMemo(() => {
+        return article.tags?.filter(tag => /^user\/(\d+|-)\/label\//.test(tag)).map(tag => decodeURIComponent(tag.split('/').pop() || '')) || [];
+    }, [article.tags]);
     const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
     const [isLoading, setIsLoading] = useState<'star' | 'read' | null>(null);
 

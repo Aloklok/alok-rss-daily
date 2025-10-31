@@ -34,20 +34,11 @@ export const useArticleManagement = ({
             );
         };
 
-        const originalReports = reports;
-        const originalFilteredArticles = filteredArticles;
-
-        setReports(prevReports => prevReports.map(report => ({
-            ...report,
-            articles: updateArticleTagsInGroups(report.articles, articleId, newTags)
-        })));
-        setFilteredArticles(prevArticles => updateArticleTagsInList(prevArticles, articleId, newTags));
-
         try {
-            const originalArticle = originalReports
+            const originalArticle = reports
                 .flatMap(r => Object.values(r.articles).flat())
                 .find(a => a.id === articleId) ||
-                originalFilteredArticles.find(a => a.id === articleId);
+                filteredArticles.find(a => a.id === articleId);
 
             const originalTags: string[] = originalArticle?.tags || [];
             
@@ -63,7 +54,8 @@ export const useArticleManagement = ({
                 await editArticleState(articleId, 'read', isNowRead);
             }
 
-            const originalUserTags = new Set(originalTags.filter(t => !t.startsWith('user/-/state')));
+            const normalize = (tag: string) => tag.replace(/\/\d+\//, '/-/');
+            const originalUserTags = new Set(originalTags.filter(t => !t.startsWith('user/-/state')).map(normalize));
             const newUserTags = new Set(newTags.filter(t => !t.startsWith('user/-/state')));
             const tagsToAdd = [...newUserTags].filter(t => !originalUserTags.has(t));
             const tagsToRemove = [...originalUserTags].filter(t => !newUserTags.has(t));
@@ -71,10 +63,15 @@ export const useArticleManagement = ({
                 await editArticleTag(articleId, tagsToAdd, tagsToRemove);
             }
 
+            // Update state only after successful API calls
+            setReports(prevReports => prevReports.map(report => ({
+                ...report,
+                articles: updateArticleTagsInGroups(report.articles, articleId, newTags)
+            })));
+            setFilteredArticles(prevArticles => updateArticleTagsInList(prevArticles, articleId, newTags));
+
         } catch (error) {
-            console.error("Failed to update article state, rolling back.", error);
-            setReports(originalReports);
-            setFilteredArticles(originalFilteredArticles);
+            console.error("Failed to update article state. UI will not be changed.", error);
         }
     }, [reports, setReports, filteredArticles, setFilteredArticles]);
 

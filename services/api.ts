@@ -158,23 +158,23 @@ export const editArticleState = (articleId: string | number, action: 'star' | 'r
 };
 
 export const editArticleTag = async (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]): Promise<void> => {
-    const formatTag = (tag: string) => tag.startsWith('user/') ? tag.replace(/^user\/\d+\//, 'user/-/') : `user/-/label/${encodeURIComponent(tag)}`;
-    
     await apiService.request<void>('/api/update-state', {
         method: 'POST',
         body: {
             articleId,
-            tagsToAdd: tagsToAdd.map(formatTag),
-            tagsToRemove: tagsToRemove.map(formatTag),
+            tagsToAdd: tagsToAdd,
+            tagsToRemove: tagsToRemove,
         },
     });
 
     if (tagsToAdd.length > 0 || tagsToRemove.length > 0) {
-        const extractLabel = (tag: string) => tag.split('/').pop() || tag;
+        const extractLabel = (tag: string) => decodeURIComponent(tag.split('/').pop() || tag);
         const added = tagsToAdd.map(extractLabel).join(', ');
         const removed = tagsToRemove.map(extractLabel).join(', ');
-        const message = tagsToAdd.length > 0 ? `成功添加标签: ${added}` : `成功移除标签: ${removed}`;
-        showToast(message, 'success');
+        let message = '';
+        if (added) message += `成功添加标签: ${added}`;
+        if (removed) message += `${added ? ' ' : ''}成功移除标签: ${removed}`;
+        showToast(message.trim(), 'success');
     }
 };
 
@@ -195,7 +195,7 @@ export const getAvailableFilters = (): Promise<AvailableFilters> => {
 export const getTags = async (): Promise<Tag[]> => {
     try {
         const filters = await getAvailableFilters();
-        return filters.tags.map(tag => ({ id: `user/-/label/${encodeURIComponent(tag)}`, label: tag }));
+        return filters.tags.map(tag => ({ id: `user/-/label/${tag}`, label: tag }));
     } catch (error) {
         console.error('Failed to fetch tags', error);
         return [];

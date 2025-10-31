@@ -3,12 +3,10 @@ import { apiHandler, getFreshRssClient } from './_utils.js';
 
 async function updateArticleState(req: VercelRequest, res: VercelResponse) {
     const { articleId, articleIds, action, isAdding, tagsToAdd, tagsToRemove } = req.body;
-    
 
     if ((!articleId && (!articleIds || !Array.isArray(articleIds))) || (!action && typeof isAdding === 'undefined' && (!tagsToAdd || !Array.isArray(tagsToAdd) || tagsToAdd.length === 0) && (!tagsToRemove || !Array.isArray(tagsToRemove) || tagsToRemove.length === 0))) {
         return res.status(400).json({ message: 'Missing required parameters' });
     }
-    // When action is provided, isAdding must be a boolean if it's defined
     if (action && typeof isAdding !== 'undefined' && typeof isAdding !== 'boolean') {
         return res.status(400).json({ message: 'When action is provided, isAdding must be a boolean' });
     }
@@ -16,11 +14,12 @@ async function updateArticleState(req: VercelRequest, res: VercelResponse) {
     const freshRss = getFreshRssClient();
     const shortLivedToken = await freshRss.getActionToken();
 
-    const params = new URLSearchParams();
+    // Manually construct the body to control encoding precisely
+    const bodyParts: string[] = [];
     const ids = articleIds && Array.isArray(articleIds) ? articleIds : [articleId];
-    ids.forEach(id => params.append('i', String(id)));
-    params.append('T', shortLivedToken);
-    
+    ids.forEach(id => bodyParts.push(`i=${encodeURIComponent(String(id))}`));
+    bodyParts.push(`T=${encodeURIComponent(shortLivedToken)}`);
+
     if (action && typeof isAdding === 'boolean') {
         const tagMap = {
             star: 'user/-/state/com.google/starred',
@@ -28,16 +27,26 @@ async function updateArticleState(req: VercelRequest, res: VercelResponse) {
         };
         const tag = tagMap[action as 'star' | 'read'];
         if (tag) {
-            params.append(isAdding ? 'a' : 'r', tag);
+            bodyParts.push(`${isAdding ? 'a' : 'r'}=${encodeURIComponent(tag)}`);
         }
     }
 
+    const formatTagForBody = (tag: string): string => {
+        const parts = tag.split('/');
+        const label = parts.pop() || '';
+        const path = parts.join('/');
+        return `${path}/${encodeURIComponent(label)}`;
+    };
+
     if (tagsToAdd && Array.isArray(tagsToAdd) && tagsToAdd.length > 0) {
-        tagsToAdd.forEach((tag: string) => params.append('a', tag));
+        tagsToAdd.forEach((tag: string) => bodyParts.push(`a=${formatTagForBody(tag)}`));
     }
     if (tagsToRemove && Array.isArray(tagsToRemove) && tagsToRemove.length > 0) {
-        tagsToRemove.forEach((tag: string) => params.append('r', tag));
+        tagsToRemove.forEach((tag: string) => bodyParts.push(`r=${formatTagForBody(tag)}`));
     }
+
+    const body = bodyParts.join('&');
+    const params = new URLSearchParams(body);
 
     const responseText = await freshRss.post<string>('/edit-tag', params);
 

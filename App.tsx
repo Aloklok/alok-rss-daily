@@ -91,7 +91,7 @@ const App: React.FC = () => {
 
     // Fetch available tags for TagPopover
     useEffect(() => {
-        setAvailableTags(availableFilters.tags.map(tag => ({ id: `user/-/label/tag}`, label: tag })));
+        setAvailableTags(availableFilters.tags.map(tag => ({ id: `user/-/label/${tag}`, label: tag })));
     }, [availableFilters.tags]);
 
     const mainContentRef = useRef<HTMLDivElement | null>(null);
