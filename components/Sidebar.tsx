@@ -33,6 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     onFilterChange,
     onOpenArticle,
     onRefresh,
+    datesForMonth, // Add datesForMonth here
 }) => {
     const {
         activeTab,
@@ -154,7 +155,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             ) : (
               <nav className="flex flex-col gap-1.5 flex-grow">
-                {dates.map(date => {
+                {datesForMonth.map(date => {
                     const isActive = isFilterActive('date', date);
                     const dateObj = new Date(date);
                     const displayDatePart = dateObj.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });

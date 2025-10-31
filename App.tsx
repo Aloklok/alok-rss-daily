@@ -121,6 +121,7 @@ const App: React.FC = () => {
                     onFilterChange={handleFilterChange}
                     onOpenArticle={handleShowArticleInMain}
                     onRefresh={combinedRefresh}
+                    datesForMonth={datesForMonth}
                 />
             </div>
 
