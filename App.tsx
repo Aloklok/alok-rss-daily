@@ -432,12 +432,13 @@ const App: React.FC = () => {
     const sidebarWidthVar = isMdUp && !isSidebarCollapsed ? '320px' : '0px';
 
     return (
-        <div className="flex flex-col md:flex-row min-h-screen font-sans" style={{ '--sidebar-width': sidebarWidthVar } as React.CSSProperties}>
+        <div className="flex flex-col md:flex-row min-h-screen font-sans">
             {/* 侧栏容器，带折叠动画 */}
             <div
                 className={`relative transition-all duration-300 ease-in-out overflow-hidden ${
                     isSidebarCollapsed ? 'md:w-0 w-0 transform -translate-x-full opacity-0 pointer-events-none' : 'md:w-80 w-full transform translate-x-0 opacity-100'
                 }`}
+                style={{ '--sidebar-width': sidebarWidthVar } as React.CSSProperties}
             >
                 <Sidebar 
                     dates={datesForMonth} // Re-introduced
@@ -456,10 +457,12 @@ const App: React.FC = () => {
             {/* 折叠/展开按钮：固定定位在“侧栏外右上角”，md+ 生效；移动端固定左上角 */}
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="fixed p-2 bg-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out border border-gray-200 hover:border-gray-300 fixed-collapse-expand-button"
+                className="fixed p-2 bg-white rounded-lg shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 fixed-collapse-expand-button"
                 style={{
                     top: '12px',
-                    left: isMdUp ? 'calc(256px + 12px)' : '12px',
+                    left: '12px',
+                    transform: isMdUp && !isSidebarCollapsed ? 'translateX(250px)' : 'translateX(0)',
+                    transition: 'transform 0.3s ease-in-out',
                     zIndex: 50
                 }}
             >
@@ -479,10 +482,12 @@ const App: React.FC = () => {
             <button
                 onClick={refreshSidebar}
                 disabled={isRefreshing}
-                className="fixed flex flex-col items-center justify-center gap-1 px-2 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-sm text-white hover:from-blue-600 hover:to-indigo-700 focus:outline-none shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 fixed-update-directory-button"
+                className="fixed flex flex-col items-center justify-center gap-1 px-2 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-sm text-white hover:from-blue-600 hover:to-indigo-700 focus:outline-none shadow-md hover:shadow-lg duration-300 transform hover:scale-105 fixed-update-directory-button"
                 style={{
-                    top: '52px', // 折叠按钮高度约40px + 12px间距
-                    left: isMdUp ? 'calc(256px + 12px)' : '12px',
+                    top: '80px', // 折叠按钮高度约40px + 12px间距
+                    left: '12px',
+                    transform: isMdUp && !isSidebarCollapsed ? 'translateX(250px)' : 'translateX(0)',
+                    transition: 'transform 0.3s ease-in-out',
                     zIndex: 50
                 }}
             >

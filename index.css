@@ -31,8 +31,12 @@
 /* 强制固定定位按钮的正确位置 */
 .fixed-update-directory-button {
   left: calc(256px + 12px) !important;
+  position: fixed !important;
+  z-index: 50 !important;
 }
 
 .fixed-collapse-expand-button {
   left: calc(256px + 12px) !important;
+  position: fixed !important;
+  z-index: 50 !important;
 }

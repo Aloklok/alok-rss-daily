@@ -25,7 +25,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         articleIds.forEach(id => {
             formData.append('i', String(id));
         });
-        console.log(formData.toString());
         const response = await fetch(url, {
             method: 'POST',
             headers: { 
