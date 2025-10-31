@@ -635,7 +635,7 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
                              <h1 className="text-5xl font-serif font-bold leading-none tracking-tight">
                                 {isToday ? '今天' : datePart}
                             </h1>
-                             <div className="mt-3 inline-block bg-white/20 backdrop-blur-sm text-white/90 px-4 py-1.5 rounded-full text-lg font-medium">
+                             <div className="mt-3 inline-block bg-white/20 backdrop-blur-sm text-white/90 px-3 py-1.5 rounded-full text-lg font-medium">
                                 {isToday ? (
                                     <>
                                         <span>{datePart}</span>
@@ -648,7 +648,7 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
                             </div>
                         </div>
                         {isToday && (
-                            <p className="mt-6 text-2xl md:text-3xl font-serif font-bold tracking-tight text-white/95">
+                            <p className="mt-6 text-xl md:text-xl font-serif font-bold tracking-tight text-white/95">
                                 {getGreeting()}，欢迎阅读今日简报。
                             </p>
                         )}
@@ -750,8 +750,8 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
           <div className="text-center py-20">
             <p className="text-2xl font-semibold text-stone-600">
                 {isToday 
-                    ? '今天暂无简报，请稍后查看。'
-                    : '该日期或分类下没有简报。'
+                    ? '暂无简报，请稍后查看。'
+                    : '该分类下没有简报。'
                 }
             </p>
           </div>

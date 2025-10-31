@@ -328,7 +328,68 @@ const App: React.FC = () => {
     const handleMarkAllAsRead = async () => {
         setIsMarkingAsRead(true);
         try {
-            await markAllAsRead();
+            // 获取当前页面的所有文章ID
+            let articleIds: (string | number)[] = [];
+            
+            if (activeFilter?.type === 'date' && reports.length > 0) {
+                // 从简报中获取文章ID
+                articleIds = reports.flatMap(report => 
+                    Object.values(report.articles).flat().map(article => article.id)
+                );
+            } else if (filteredArticles.length > 0) {
+                // 从过滤后的文章列表中获取文章ID
+                articleIds = filteredArticles.map(article => article.id);
+            }
+            
+            await markAllAsRead(articleIds);
+            
+            // 更新reports状态，将所有文章标记为已读
+            if (activeFilter?.type === 'date' && reports.length > 0) {
+                setReports(prevReports => 
+                    prevReports.map(report => ({
+                        ...report,
+                        articles: Object.keys(report.articles).reduce((acc, key) => {
+                            acc[key] = report.articles[key].map(article => {
+                                // 如果文章不在articleIds中，则保持原样
+                                if (!articleIds.includes(article.id)) {
+                                    return article;
+                                }
+                                // 如果文章已在已读状态，则保持原样
+                                if (article.tags.includes('user/-/state/com.google/read')) {
+                                    return article;
+                                }
+                                // 添加已读标签
+                                return {
+                                    ...article,
+                                    tags: [...article.tags, 'user/-/state/com.google/read']
+                                };
+                            });
+                            return acc;
+                        }, {} as GroupedArticles)
+                    }))
+                );
+            }
+            
+            // 更新filteredArticles状态，将所有文章标记为已读
+            if (filteredArticles.length > 0) {
+                setFilteredArticles(prevArticles => 
+                    prevArticles.map(article => {
+                        // 如果文章不在articleIds中，则保持原样
+                        if (!articleIds.includes(article.id)) {
+                            return article;
+                        }
+                        // 如果文章已在已读状态，则保持原样
+                        if (article.tags.includes('user/-/state/com.google/read')) {
+                            return article;
+                        }
+                        // 添加已读标签
+                        return {
+                            ...article,
+                            tags: [...article.tags, 'user/-/state/com.google/read']
+                        };
+                    })
+                );
+            }
         } catch (error) {
             console.error("UI: Failed to mark all as read.", error);
         } finally {
@@ -395,10 +456,10 @@ const App: React.FC = () => {
             {/* 折叠/展开按钮：固定定位在“侧栏外右上角”，md+ 生效；移动端固定左上角 */}
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="fixed p-2 bg-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out border border-gray-200 hover:border-gray-300"
+                className="fixed p-2 bg-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out border border-gray-200 hover:border-gray-300 fixed-collapse-expand-button"
                 style={{
                     top: '12px',
-                    left: isMdUp ? 'calc(var(--sidebar-width) + 12px)' : '12px',
+                    left: isMdUp ? 'calc(256px + 12px)' : '12px',
                     zIndex: 50
                 }}
             >
@@ -418,10 +479,10 @@ const App: React.FC = () => {
             <button
                 onClick={refreshSidebar}
                 disabled={isRefreshing}
-                className="fixed flex flex-col items-center justify-center gap-1 px-2 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-sm text-white hover:from-blue-600 hover:to-indigo-700 focus:outline-none shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+                className="fixed flex flex-col items-center justify-center gap-1 px-2 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-sm text-white hover:from-blue-600 hover:to-indigo-700 focus:outline-none shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 fixed-update-directory-button"
                 style={{
                     top: '52px', // 折叠按钮高度约40px + 12px间距
-                    left: isMdUp ? 'calc(var(--sidebar-width) + 12px)' : '12px',
+                    left: isMdUp ? 'calc(256px + 12px)' : '12px',
                     zIndex: 50
                 }}
             >

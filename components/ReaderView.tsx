@@ -81,6 +81,23 @@ const ReaderView: React.FC<ReaderViewProps> = ({ isVisible, isLoading, content, 
                                     className="prose prose-lg max-w-none text-gray-800 leading-relaxed"
                                     dangerouslySetInnerHTML={{ __html: content.content }} 
                                 />
+                                <script
+                                  dangerouslySetInnerHTML={{
+                                    __html: `
+                                      // Ensure images have width and height attributes to prevent CLS
+                                      document.addEventListener('DOMContentLoaded', function() {
+                                        const images = document.querySelectorAll('.prose img');
+                                        images.forEach(img => {
+                                          if (!img.hasAttribute('width') && !img.hasAttribute('height')) {
+                                            img.setAttribute('loading', 'lazy');
+                                            img.style.width = '100%';
+                                            img.style.height = 'auto';
+                                          }
+                                        });
+                                      });
+                                    `,
+                                  }}
+                                />
                             </article>
                         ) : (
                              <div className="p-8 text-center text-gray-500">

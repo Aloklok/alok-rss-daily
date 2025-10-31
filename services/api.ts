@@ -75,10 +75,60 @@ export const getBriefingReportsByDate = async (date: string, slot?: TimeSlot): P
     }
 };
 
-export const markAllAsRead = async (): Promise<void> => {
-    // This function would ideally update Supabase, but for now, it's a placeholder.
-    await sleep(1000);
-    console.log("Marking all articles as read (placeholder).");
+// Helper function to get short-lived token
+const getShortLivedToken = async (): Promise<string> => {
+    try {
+        const response = await fetch('/api/update-state', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ getToken: true }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to fetch short-lived token');
+        }
+
+        const { token } = await response.json();
+        return token;
+    } catch (error) {
+        console.error('Failed to fetch short-lived token:', error);
+        throw error;
+    }
+};
+
+export const markAllAsRead = async (articleIds: (string | number)[]): Promise<void> => {
+    if (!articleIds || articleIds.length === 0) {
+        console.log("No articles to mark as read.");
+        return;
+    }
+    
+    try {
+        // Use the unified update-state API which supports batch operations
+        const response = await fetch('/api/update-state', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                articleIds,
+                action: 'read',
+                isAdding: true
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to mark all articles as read');
+        }
+        
+        console.log(`Successfully marked ${articleIds.length} articles as read.`);
+    } catch (error) {
+        console.error("Failed to mark all articles as read:", error);
+        throw error;
+    }
 };
 
 export const getCleanArticleContent = async (article: Article): Promise<CleanArticleContent> => {

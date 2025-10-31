@@ -1,3 +1,38 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 图片和视频布局稳定性优化 */
+.prose img {
+  max-width: 100%;
+  height: auto;
+  /* 预留空间以防止CLS */
+  display: block;
+}
+
+/* 确保视频容器有固定宽高比 */
+.prose video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 防止图片加载时的布局偏移 */
+.prose img[data-src] {
+  min-height: 100px;
+}
+
+/* 自定义字体加载时防止文本闪烁 */
+@supports (font-variation-settings: normal) {
+  body {
+    font-family: 'Microsoft YaHei', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  }
+}
+
+/* 强制固定定位按钮的正确位置 */
+.fixed-update-directory-button {
+  left: calc(256px + 12px) !important;
+}
+
+.fixed-collapse-expand-button {
+  left: calc(256px + 12px) !important;
+}

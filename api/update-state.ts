@@ -12,11 +12,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ message: 'Server configuration error: Missing FreshRSS environment variables.' });
     }
 
-    const { articleId, action, isAdding, tagsToAdd, tagsToRemove } = req.body;
+    const { articleId, articleIds, action, isAdding, tagsToAdd, tagsToRemove, getToken } = req.body;
+    
+    // Handle token request
+    if (getToken) {
+        try {
+            const tokenResponse = await fetch(`${GREADER_API_URL}/greader.php/reader/api/0/token`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,
+                },
+            });
 
-    if (!articleId || (!action && (!tagsToAdd || !tagsToRemove))) {
+            if (!tokenResponse.ok) {
+                const errorText = await tokenResponse.text();
+                throw new Error(`Failed to fetch action token. Status: ${tokenResponse.status}. Response: ${errorText}`);
+            }
+
+            const shortLivedToken = await tokenResponse.text();
+            return res.status(200).json({ token: shortLivedToken.trim() });
+        } catch (error) {
+            console.error('Failed to fetch short-lived token:', error);
+            return res.status(500).json({ message: 'Failed to fetch short-lived token', error: error.message });
+        }
+    }
+
+    // Validate required parameters
+    if ((!articleId && (!articleIds || !Array.isArray(articleIds))) || (!action && (!tagsToAdd || !tagsToRemove))) {
         return res.status(400).json({ message: 'Missing required parameters' });
     }
+
+    // Ensure we have an array of article IDs
+    const ids = articleIds && Array.isArray(articleIds) ? articleIds : [articleId];
 
     try {
         // Step 1: Fetch the short-lived action token from FreshRSS
@@ -38,7 +65,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const apiPath = `${GREADER_API_URL}/greader.php/reader/api/0/edit-tag`;
         
         const params = new URLSearchParams();
-        params.append('i', String(articleId)); // 'i' is the item ID parameter for GReader API
+        // Add all article IDs as 'i' parameters
+        ids.forEach(id => params.append('i', String(id)));
         params.append('T', shortLivedToken.trim()); // Pass the short-lived token
 
         if (action) { // Handle star/read
