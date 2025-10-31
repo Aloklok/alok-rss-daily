@@ -192,12 +192,12 @@ export const getAvailableFilters = (): Promise<AvailableFilters> => {
     return apiService.request<AvailableFilters>('/api/list-categories-tags').catch(() => ({ categories: [], tags: [] }));
 };
 
-// Mock function, remains unchanged
 export const getTags = async (): Promise<Tag[]> => {
-    await new Promise(resolve => setTimeout(resolve, 200));
-    return [
-        { id: 'user/1000/label/framework', label: 'Framework' },
-        { id: 'user/1000/label/ai', label: 'AI' },
-        { id: 'user/1000/label/performance', label: 'Performance' },
-    ];
+    try {
+        const filters = await getAvailableFilters();
+        return filters.tags.map(tag => ({ id: `user/-/label/${encodeURIComponent(tag)}`, label: tag }));
+    } catch (error) {
+        console.error('Failed to fetch tags', error);
+        return [];
+    }
 };
