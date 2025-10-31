@@ -1,104 +1,76 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
-import { Article } from '../types'; // Adjust the path based on your project structure
+import { Article } from '../types';
+import { apiHandler, getSupabaseClient } from './_utils.js';
 
-// Initialize Supabase client securely on the server side
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error("Supabase environment variables (URL and service role key) are not configured.");
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-
-type TimeSlot = 'morning' | 'afternoon' | 'evening';
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function getBriefings(req: VercelRequest, res: VercelResponse) {
     const { date, slot } = req.query;
 
     if (!date || typeof date !== 'string') {
         return res.status(400).json({ message: 'Date parameter is required.' });
     }
 
-    try {
-        let data: Article[] = [];
-        let error: any = null;
+    const supabase = getSupabaseClient();
+    
+    let query = supabase
+        .from('articles')
+        .select('*');
 
-        const makeRange = (start: string, end: string) => ({ start, end });
+    // Apply date range filtering based on Asia/Shanghai timezone
+    const startDate = new Date(`${date}T00:00:00.000+08:00`);
+    const endDate = new Date(`${date}T23:59:59.999+08:00`);
 
-        let ranges: Array<{ start: string; end: string }>;
-        if (!slot) {
-            ranges = [makeRange(`${date}T00:00:00.000+08:00`, `${date}T23:59:59.999+08:00`)];
-        } else if (slot === 'morning') {
-            ranges = [makeRange(`${date}T00:00:00.000+08:00`, `${date}T11:59:59.999+08:00`)];
-        } else if (slot === 'afternoon') {
-            ranges = [makeRange(`${date}T12:00:00.000+08:00`, `${date}T17:59:59.999+08:00`)];
-        } else { // evening
-            ranges = [makeRange(`${date}T18:00:00.000+08:00`, `${date}T23:59:59.999+08:00`)];
-        }
-
-        for (const r of ranges) {
-            const { data: chunk, error: err } = await supabase
-                .from('articles')
-                .select('*')
-                .gte('n8n_processing_date', r.start)
-                .lte('n8n_processing_date', r.end);
-            
-            if (err) {
-                error = err;
-                break;
-            }
-            if (chunk && chunk.length > 0) {
-                data = data.concat(chunk as any);
-            }
-        }
-
-        if (error) {
-            console.error('Supabase error:', error);
-            return res.status(500).json({ message: 'Error fetching articles from Supabase', error: error.message });
-        }
-
-        if (!data || data.length === 0) {
-            return res.status(200).json([]);
-        }
-
-        // Deduplicate by id
-        const uniqueById = new Map<string | number, Article>();
-        data.forEach((a) => {
-            uniqueById.set(a.id, a);
-        });
-        const deduped = Array.from(uniqueById.values());
-
-        // Group articles by importance and sort by score within each group
-        const groupedArticles: { [key: string]: Article[] } = {
-            '重要新闻': [],
-            '必知要闻': [],
-            '常规更新': [],
-        };
-
-        deduped.forEach(article => {
-            const importance = article.verdict?.importance || '常规更新';
-            if (groupedArticles[importance]) {
-                groupedArticles[importance].push(article);
-            } else {
-                groupedArticles['常规更新'].push(article); // Fallback for unknown importance
-            }
-        });
-
-        // Sort articles within each group by score descending
-        for (const importance in groupedArticles) {
-            groupedArticles[importance].sort((a, b) => {
-                const scoreA = a.verdict?.score || 0;
-                const scoreB = b.verdict?.score || 0;
-                return scoreB - scoreA;
-            });
-        }
-
-        return res.status(200).json(groupedArticles);
-
-    } catch (error: any) {
-        console.error('Handler error:', error);
-        return res.status(500).json({ message: 'An unexpected error occurred', error: error.message });
+    if (slot === 'morning') {
+        endDate.setHours(11, 59, 59, 999);
+    } else if (slot === 'afternoon') {
+        startDate.setHours(12, 0, 0, 0);
+        endDate.setHours(17, 59, 59, 999);
+    } else if (slot === 'evening') {
+        startDate.setHours(18, 0, 0, 0);
     }
+
+    query = query.gte('n8n_processing_date', startDate.toISOString());
+    query = query.lte('n8n_processing_date', endDate.toISOString());
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('Supabase error:', error);
+        return res.status(500).json({ message: 'Error fetching articles from Supabase', error: error.message });
+    }
+
+    if (!data || data.length === 0) {
+        return res.status(200).json({});
+    }
+
+    // Deduplicate by id
+    const uniqueById = new Map<string | number, Article>();
+    data.forEach((a: any) => {
+        uniqueById.set(a.id, a as Article);
+    });
+    const deduped = Array.from(uniqueById.values());
+
+    // Group articles by importance and sort by score within each group
+    const groupedArticles: { [key: string]: Article[] } = {
+        '重要新闻': [],
+        '必知要闻': [],
+        '常规更新': [],
+    };
+
+    deduped.forEach(article => {
+        const importance = article.verdict?.importance || '常规更新';
+        if (groupedArticles[importance]) {
+            groupedArticles[importance].push(article);
+        } else {
+            groupedArticles['常规更新'].push(article); // Fallback for unknown importance
+        }
+    });
+
+    // Sort articles within each group by score descending
+    for (const importance in groupedArticles) {
+        groupedArticles[importance].sort((a, b) => (b.verdict?.score || 0) - (a.verdict?.score || 0));
+    }
+
+    return res.status(200).json(groupedArticles);
 }
+
+export default apiHandler(['GET'], getBriefings);

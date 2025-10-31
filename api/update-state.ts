@@ -1,110 +1,46 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { apiHandler, getFreshRssClient } from './_utils';
 
-const GREADER_API_URL = process.env.FRESHRSS_API_URL;
-const AUTH_TOKEN = process.env.FRESHRSS_AUTH_TOKEN;
+async function updateArticleState(req: VercelRequest, res: VercelResponse) {
+    const { articleId, articleIds, action, isAdding, tagsToAdd, tagsToRemove } = req.body;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ message: 'Method Not Allowed' });
-    }
-
-    if (!GREADER_API_URL || !AUTH_TOKEN) {
-        return res.status(500).json({ message: 'Server configuration error: Missing FreshRSS environment variables.' });
-    }
-
-    const { articleId, articleIds, action, isAdding, tagsToAdd, tagsToRemove, getToken } = req.body;
-    
-    // Handle token request
-    if (getToken) {
-        try {
-            const tokenResponse = await fetch(`${GREADER_API_URL}/greader.php/reader/api/0/token`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,
-                },
-            });
-
-            if (!tokenResponse.ok) {
-                const errorText = await tokenResponse.text();
-                throw new Error(`Failed to fetch action token. Status: ${tokenResponse.status}. Response: ${errorText}`);
-            }
-
-            const shortLivedToken = await tokenResponse.text();
-            return res.status(200).json({ token: shortLivedToken.trim() });
-        } catch (error: any) {
-        console.error('Failed to fetch short-lived token:', error);
-        return res.status(500).json({ message: 'Failed to fetch short-lived token', error: error.message });
-    }
-    }
-
-    // Validate required parameters
     if ((!articleId && (!articleIds || !Array.isArray(articleIds))) || (!action && (!tagsToAdd || !tagsToRemove))) {
         return res.status(400).json({ message: 'Missing required parameters' });
     }
 
-    // Ensure we have an array of article IDs
+    const freshRss = getFreshRssClient();
+    const shortLivedToken = await freshRss.getActionToken();
+
+    const params = new URLSearchParams();
     const ids = articleIds && Array.isArray(articleIds) ? articleIds : [articleId];
+    ids.forEach(id => params.append('i', String(id)));
+    params.append('T', shortLivedToken);
 
-    try {
-        // Step 1: Fetch the short-lived action token from FreshRSS
-        const tokenResponse = await fetch(`${GREADER_API_URL}/greader.php/reader/api/0/token`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,
-            },
-        });
-
-        if (!tokenResponse.ok) {
-            const errorText = await tokenResponse.text();
-            throw new Error(`Failed to fetch action token. Status: ${tokenResponse.status}. Response: ${errorText}`);
+    if (action) {
+        const tagMap = {
+            star: 'user/-/state/com.google/starred',
+            read: 'user/-/state/com.google/read',
+        };
+        const tag = tagMap[action as 'star' | 'read'];
+        if (tag) {
+            params.append(isAdding ? 'a' : 'r', tag);
         }
-
-        const shortLivedToken = await tokenResponse.text();
-
-        // Step 2: Use the short-lived token to perform the edit-tag action
-        const apiPath = `${GREADER_API_URL}/greader.php/reader/api/0/edit-tag`;
-        
-        const params = new URLSearchParams();
-        // Add all article IDs as 'i' parameters
-        ids.forEach(id => params.append('i', String(id)));
-        params.append('T', shortLivedToken.trim()); // Pass the short-lived token
-
-        if (action) { // Handle star/read
-            const tagMap = {
-                star: 'user/-/state/com.google/starred',
-                read: 'user/-/state/com.google/read',
-            };
-            const tag = tagMap[action as 'star' | 'read'];
-            if(tag) {
-               params.append(isAdding ? 'a' : 'r', tag);
-            }
-        }
-
-        if (tagsToAdd && Array.isArray(tagsToAdd) && tagsToAdd.length > 0) {
-            tagsToAdd.forEach((tag: string) => params.append('a', tag));
-        }
-        if (tagsToRemove && Array.isArray(tagsToRemove) && tagsToRemove.length > 0) {
-            tagsToRemove.forEach((tag: string) => params.append('r', tag));
-        }
-
-        const response = await fetch(apiPath, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': `GoogleLogin auth=${AUTH_TOKEN}`,
-            },
-            body: params.toString(),
-        });
-
-        const responseText = await response.text();
-        if (!response.ok || responseText.trim() !== 'OK') {
-             throw new Error(`Failed to update state. Status: ${response.status}. Response: ${responseText}`);
-        }
-
-        res.status(200).json({ success: true });
-
-    } catch (error: any) {
-        console.error("Error in /api/update-state:", error);
-        res.status(500).json({ message: 'Error updating state', error: error.message });
     }
+
+    if (tagsToAdd && Array.isArray(tagsToAdd) && tagsToAdd.length > 0) {
+        tagsToAdd.forEach((tag: string) => params.append('a', tag));
+    }
+    if (tagsToRemove && Array.isArray(tagsToRemove) && tagsToRemove.length > 0) {
+        tagsToRemove.forEach((tag: string) => params.append('r', tag));
+    }
+
+    const responseText = await freshRss.post<string>('/edit-tag', params);
+
+    if (responseText.trim() !== 'OK') {
+        throw new Error(`Failed to update state. FreshRSS responded with: ${responseText}`);
+    }
+
+    return res.status(200).json({ success: true });
 }
+
+export default apiHandler(['POST'], updateArticleState);
