@@ -55,7 +55,7 @@ const App: React.FC = () => {
         isMarkingAsRead,
         handleArticleStateChange,
         handleMarkAllAsRead,
-    } = useArticleManagement({ reports, setReports, filteredArticles, setFilteredArticles }); // Pass the correct setters
+    } = useArticleManagement({ reports, setReports, filteredArticles, setFilteredArticles, activeFilter, timeSlot }); // Pass the correct setters
 
     const { 
         readerContent,
@@ -72,7 +72,7 @@ const App: React.FC = () => {
     const combinedRefresh = useCallback(async () => {
         await refreshFilters();
         if (activeFilter) {
-            fetchData(activeFilter, timeSlot);
+            fetchData(activeFilter, timeSlot, true);
         }
     }, [refreshFilters, activeFilter, fetchData, timeSlot]);
 
@@ -102,13 +102,34 @@ const App: React.FC = () => {
 
     const isLoading = isInitialLoad || isDataLoading;
 
+    // Effect to lock body scroll when mobile sidebar is open
+    useEffect(() => {
+        if (!isSidebarCollapsed && !isMdUp) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        // Cleanup function to reset style on component unmount
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isSidebarCollapsed, isMdUp]);
+
     return (
         <div className="flex flex-col md:flex-row min-h-screen font-sans">
+            {/* Backdrop for mobile */}
+            {!isSidebarCollapsed && !isMdUp && (
+                <div 
+                    className="fixed inset-0 bg-black/50 z-40" 
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    aria-hidden="true"
+                />
+            )}
+
             <div
-                className={`relative transition-all duration-300 ease-in-out overflow-hidden ${
-                    isSidebarCollapsed ? 'w-0 h-0 md:h-auto transform -translate-x-full opacity-0 pointer-events-none' : 'w-full md:w-80 transform translate-x-0 opacity-100'
-                }`}
-                style={{ '--sidebar-width': isMdUp && !isSidebarCollapsed ? '320px' : '0px' } as React.CSSProperties}
+                className={`fixed top-0 left-0 h-full w-80 bg-gray-50 border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out md:relative md:w-80 md:transform-none md:transition-none
+                    ${isSidebarCollapsed ? '-translate-x-full' : 'translate-x-0'}
+                `}
             >
                 <Sidebar 
                     dates={datesForMonth}
@@ -118,8 +139,14 @@ const App: React.FC = () => {
                     onMonthChange={setSelectedMonth}
                     availableFilters={availableFilters}
                     activeFilter={activeFilter}
-                    onFilterChange={handleFilterChange}
-                    onOpenArticle={handleShowArticleInMain}
+                    onFilterChange={(filter) => {
+                        handleFilterChange(filter);
+                        if (!isMdUp) setIsSidebarCollapsed(true); // Auto-close on mobile after selection
+                    }}
+                    onOpenArticle={(article) => {
+                        handleShowArticleInMain(article);
+                        if (!isMdUp) setIsSidebarCollapsed(true); // Auto-close on mobile
+                    }}
                     onRefresh={combinedRefresh}
                     datesForMonth={datesForMonth}
                 />
@@ -128,18 +155,18 @@ const App: React.FC = () => {
             {/* Control Buttons */}
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className={`fixed p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 ${isReaderVisible ? 'hidden' : ''}`}
+                className={`fixed p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 ${isReaderVisible ? 'hidden' : ''} ${activeFilter?.type === 'date' && !isMdUp ? 'hidden' : ''}`}
                 style={{
-                    top: '16px',
-                    left: isMdUp && !isSidebarCollapsed ? '304px' : '12px',
+                    top: '20px',
+                    left: isMdUp && !isSidebarCollapsed ? '304px' : '20px',
                     transition: 'left 0.3s ease-in-out',
                     zIndex: 50
                 }}
             >
                 {isSidebarCollapsed ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-800" fill="none" viewBox="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                 ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="2" /><path d="M9 4v16" strokeWidth="2" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-800" fill="none" viewBox="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="2" /><path d="M9 4v16" strokeWidth="2" /></svg>
                 )}
             </button>
 
@@ -167,6 +194,8 @@ const App: React.FC = () => {
                                 fetchData(activeFilter, slot);
                             }
                         }}
+                        isSidebarCollapsed={isSidebarCollapsed}
+                        onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                     />
                 ) : (activeFilter?.type === 'category' || activeFilter?.type === 'tag') ? (
                     <ArticleList

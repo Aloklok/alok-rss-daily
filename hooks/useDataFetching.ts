@@ -7,6 +7,15 @@ interface UseDataFetchingProps {
     isInitialLoad: boolean;
 }
 
+export const getCacheKey = (filter: Filter, timeSlot: 'morning' | 'afternoon' | 'evening' | null) => {
+    if (!filter) return null;
+    let key = `articleCache-${filter.type}-${filter.value}`;
+    if (filter.type === 'date' && timeSlot) {
+        key += `-${timeSlot}`;
+    }
+    return key;
+};
+
 export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetchingProps) => {
     const [reports, setReports] = useState<BriefingReport[]>([]);
     const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
@@ -14,79 +23,120 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
     const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
     const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
 
-    useEffect(() => {
-        const fetchData = async (filter: Filter, slotOverride?: 'morning' | 'afternoon' | 'evening' | null) => {
-            if (!filter) return;
-            setIsLoading(true);
+    const fetchData = useCallback(async (filter: Filter, slotOverride?: 'morning' | 'afternoon' | 'evening' | null, forceRefresh: boolean = false) => {
+        if (!filter) return;
+        setIsLoading(true);
 
-            if (filter.type === 'date') {
-                setFilteredArticles([]);
-                setReports([]);
-                setSelectedReportId(null);
-                try {
-                    const fetchedReports = await getBriefingReportsByDate(filter.value, slotOverride || undefined);
-                    const allArticles = fetchedReports.flatMap(report => Object.values(report.articles).flat());
-                    const articleIds = allArticles.map(article => article.id);
-
-                    if (articleIds.length > 0) {
-                        const states = await getArticleStates(articleIds);
-                        const reportsWithState = fetchedReports.map(report => ({
-                            ...report,
-                            articles: Object.entries(report.articles).reduce((acc, [importance, articles]) => {
-                                acc[importance] = articles.map(article => ({
-                                    ...article,
-                                    tags: states[String(article.id)] || []
-                                }));
-                                return acc;
-                            }, {} as GroupedArticles)
-                        }));
-                        setReports(reportsWithState);
-                    } else {
-                        setReports(fetchedReports);
+        const cacheKey = getCacheKey(filter, slotOverride || timeSlot);
+        if (!forceRefresh && cacheKey) {
+            try {
+                const cachedData = sessionStorage.getItem(cacheKey);
+                if (cachedData) {
+                    const parsedData = JSON.parse(cachedData);
+                    if (filter.type === 'date') {
+                        setReports(parsedData.reports);
+                        setSelectedReportId(parsedData.selectedReportId);
+                    } else if (filter.type === 'category' || filter.type === 'tag') {
+                        setFilteredArticles(parsedData.articles);
                     }
-
-                    if (fetchedReports.length > 0) {
-                        setSelectedReportId(fetchedReports[0].id);
-                    } else {
-                        setSelectedReportId(null); // Explicitly set to null if no reports
-                    }
-                } catch (error) {
-                    console.error(`Failed to fetch data for date filter`, error);
-                    setReports([]);
-                    setSelectedReportId(null); // Ensure no report is selected on error
-                } finally {
                     setIsLoading(false);
+                    console.log(`useDataFetching: Loaded data from cache for ${cacheKey}`);
+                    return;
                 }
-            } else if (filter.type === 'category' || filter.type === 'tag') {
+            } catch (error) {
+                console.error(`Failed to load data from cache for ${cacheKey}`, error);
+                sessionStorage.removeItem(cacheKey);
+            }
+        }
+
+        if (filter.type === 'date') {
+            setFilteredArticles([]);
+            setReports([]);
+            setSelectedReportId(null);
+            try {
+                const fetchedReports = await getBriefingReportsByDate(filter.value, slotOverride || undefined);
+                const allArticles = fetchedReports.flatMap(report => Object.values(report.articles).flat());
+                const articleIds = allArticles.map(article => article.id);
+
+                let reportsToCache = fetchedReports;
+                let selectedReportIdToCache: number | null = null;
+
+                if (articleIds.length > 0) {
+                    const states = await getArticleStates(articleIds);
+                    reportsToCache = fetchedReports.map(report => ({
+                        ...report,
+                        articles: Object.entries(report.articles).reduce((acc, [importance, articles]) => {
+                            acc[importance] = articles.map(article => ({
+                                ...article,
+                                tags: states[String(article.id)] || []
+                            }));
+                            return acc;
+                        }, {} as GroupedArticles)
+                    }));
+                    setReports(reportsToCache);
+                } else {
+                    setReports(fetchedReports);
+                }
+
+                if (reportsToCache.length > 0) {
+                    selectedReportIdToCache = reportsToCache[0].id;
+                    setSelectedReportId(selectedReportIdToCache);
+                } else {
+                    setSelectedReportId(null);
+                }
+
+                if (cacheKey) {
+                    sessionStorage.setItem(cacheKey, JSON.stringify({ reports: reportsToCache, selectedReportId: selectedReportIdToCache }));
+                    console.log(`useDataFetching: Cached data for ${cacheKey}`);
+                }
+
+            } catch (error) {
+                console.error(`Failed to fetch data for date filter`, error);
                 setReports([]);
                 setSelectedReportId(null);
-                try {
-                    const articles = await getArticlesByLabel(filter);
-                    const articleIds = articles.map(article => article.id);
-                    if (articleIds.length > 0) {
-                        const states = await getArticleStates(articleIds);
-                        const articlesWithState = articles.map(article => ({
-                            ...article,
-                            tags: states[String(article.id)] || []
-                        }));
-                        setFilteredArticles(articlesWithState);
-                    } else {
-                        setFilteredArticles([]);
-                    }
-                } catch (error) {
-                    console.error(`Failed to fetch data for ${filter.type} filter`, error);
-                    setFilteredArticles([]);
-                } finally {
-                    setIsLoading(false);
-                }
-            } else if (filter.type === 'starred') {
-                setReports([]);
-                setFilteredArticles([]);
-                setSelectedReportId(null);
+            } finally {
                 setIsLoading(false);
             }
-        };
+        } else if (filter.type === 'category' || filter.type === 'tag') {
+            setReports([]);
+            setSelectedReportId(null);
+            try {
+                const articles = await getArticlesByLabel(filter);
+                const articleIds = articles.map(article => article.id);
 
+                let articlesToCache = articles;
+
+                if (articleIds.length > 0) {
+                    const states = await getArticleStates(articleIds);
+                    articlesToCache = articles.map(article => ({
+                        ...article,
+                        tags: states[String(article.id)] || []
+                    }));
+                    setFilteredArticles(articlesToCache);
+                } else {
+                    setFilteredArticles([]);
+                }
+
+                if (cacheKey) {
+                    sessionStorage.setItem(cacheKey, JSON.stringify({ articles: articlesToCache }));
+                    console.log(`useDataFetching: Cached data for ${cacheKey}`);
+                }
+
+            } catch (error) {
+                console.error(`Failed to fetch data for ${filter.type} filter`, error);
+                setFilteredArticles([]);
+            } finally {
+                setIsLoading(false);
+            }
+        } else if (filter.type === 'starred') {
+            setReports([]);
+            setFilteredArticles([]);
+            setSelectedReportId(null);
+            setIsLoading(false);
+        }
+    }, [timeSlot]); // Added timeSlot to dependencies
+
+    useEffect(() => {
         if (!isInitialLoad && activeFilter) {
             if (activeFilter.type === 'date') {
                 const today = getTodayInShanghai();
@@ -110,47 +160,7 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
                 fetchData(activeFilter);
             }
         }
-    }, [activeFilter, isInitialLoad]);
-
-    const manualFetch = useCallback((filter: Filter, slot?: 'morning' | 'afternoon' | 'evening' | null) => {
-        // This function is for manual triggers, like the time slot change buttons.
-        // It's kept separate from the automatic useEffect fetching.
-        const fetchData = async () => {
-            // The implementation is identical to the one inside useEffect
-            if (!filter) return;
-            setIsLoading(true);
-            if (filter.type === 'date') {
-                setFilteredArticles([]);
-                setReports([]);
-                setSelectedReportId(null);
-                try {
-                    const fetchedReports = await getBriefingReportsByDate(filter.value, slot || undefined);
-                    const allArticles = fetchedReports.flatMap(report => Object.values(report.articles).flat());
-                    const articleIds = allArticles.map(article => article.id);
-                    if (articleIds.length > 0) {
-                        const states = await getArticleStates(articleIds);
-                        const reportsWithState = fetchedReports.map(report => ({
-                            ...report,
-                            articles: Object.entries(report.articles).reduce((acc, [importance, articles]) => {
-                                acc[importance] = articles.map(article => ({ ...article, tags: states[String(article.id)] || [] }));
-                                return acc;
-                            }, {} as GroupedArticles)
-                        }));
-                        setReports(reportsWithState);
-                    } else {
-                        setReports(fetchedReports);
-                    }
-                    if (fetchedReports.length > 0) setSelectedReportId(fetchedReports[0].id);
-                } catch (error) {
-                    console.error(`Failed to fetch data for date filter`, error);
-                    setReports([]);
-                } finally {
-                    setIsLoading(false);
-                }
-            }
-        };
-        fetchData();
-    }, []);
+    }, [activeFilter, isInitialLoad, fetchData]);
 
     return {
         reports,
@@ -162,6 +172,6 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
         setSelectedReportId,
         timeSlot,
         setTimeSlot,
-        fetchData: manualFetch,
+        fetchData,
     };
 };
