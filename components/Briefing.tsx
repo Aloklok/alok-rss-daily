@@ -54,8 +54,8 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, availableTags, on
                         const sectionId = `importance-${importance.replace(/\s+/g, '-')}`;
                         return (
                             <div key={importance}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 border-b-2 border-stone-200 my-2 pb-2">
-                                    <div className="py-2">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 border-b-2 border-stone-200 my-0 pb-0.5">
+                                    <div className="py-0.5">
                                         <a href={`#${sectionId}`} onClick={(e) => handleJump(e, sectionId)} className="font-semibold text-base text-rose-800 hover:underline">
                                             <span className="mr-2"></span>
                                             {importance}

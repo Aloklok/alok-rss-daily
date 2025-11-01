@@ -127,8 +127,11 @@ const App: React.FC = () => {
             )}
 
             <div
-                className={`fixed top-0 left-0 h-full w-80 bg-gray-50 border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out md:relative md:w-80 md:transform-none md:transition-none
-                    ${isSidebarCollapsed ? '-translate-x-full' : 'translate-x-0'}
+                className={`h-full bg-gray-50 border-r border-gray-200 z-50 transition-all duration-300 ease-in-out
+                    ${!isMdUp // Mobile specific styles
+                        ? `fixed top-0 left-0 w-64 ${isSidebarCollapsed ? '-translate-x-full' : 'translate-x-0'}`
+                        : `md:fixed md:top-0 md:bottom-0 md:left-0 md:w-80 md:overflow-y-auto ${isSidebarCollapsed ? 'md:w-0 md:opacity-0 md:overflow-hidden' : 'md:w-80 md:opacity-100'}` // Desktop specific styles
+                    }
                 `}
             >
                 <Sidebar 
@@ -158,7 +161,7 @@ const App: React.FC = () => {
                 className={`fixed p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 ${isReaderVisible ? 'hidden' : ''} ${activeFilter?.type === 'date' && !isMdUp ? 'hidden' : ''}`}
                 style={{
                     top: '20px',
-                    left: isMdUp && !isSidebarCollapsed ? '304px' : '20px',
+                    left: isMdUp ? (isSidebarCollapsed ? '20px' : '304px') : '20px',
                     transition: 'left 0.3s ease-in-out',
                     zIndex: 50
                 }}
@@ -172,7 +175,7 @@ const App: React.FC = () => {
 
 
             {/* Main Content */}
-            <div ref={mainContentRef} className="flex-1 bg-stone-50 w-full max-w-4xl mx-auto px-2 md:px-8">
+            <div ref={mainContentRef} className={`flex-1 bg-stone-50 w-full max-w-4xl mx-auto px-2 md:px-8 ${!isSidebarCollapsed && isMdUp ? 'md:ml-80' : ''}`}>
                 {isLoading ? (
                     <LoadingSpinner />
                 ) : sidebarArticle ? (

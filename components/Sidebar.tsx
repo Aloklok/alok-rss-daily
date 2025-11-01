@@ -119,7 +119,9 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div>
                 <h2 className="text-base font-semibold text-gray-800 my-3">分类</h2>
                 <nav className="flex flex-col gap-1.5">
-                    {availableFilters.categories.map(category => (
+                    {availableFilters.categories
+                        .filter(category => category !== '未分类')
+                        .map(category => (
                         <button
                             key={category}
                             onClick={() => onFilterChange({ type: 'category', value: category })}
@@ -203,9 +205,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     );
 
     return (
-        <aside className="flex flex-col flex-shrink-0 bg-gray-50 border-r border-gray-200 w-full md:w-80 p-4 space-y-4 relative">
+        <aside className="flex flex-col flex-shrink-0 bg-gray-50 border-r border-gray-200 w-full h-full md:w-80 p-4 space-y-4 relative">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-gray-900 pl-10 pr-1">Briefing Hub</h1>
+                <h1 className="text-2xl font-bold text-gray-900 pr-1">Briefing Hub</h1>
                 <button onClick={handleRefreshClick} disabled={isLoading} className="p-2 rounded-full hover:bg-gray-200 transition-colors">
                     <svg className={`h-5 w-5 text-gray-600 ${isLoading ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582A7.962 7.962 0 0112 4.062a8.002 8.002 0 018 8.002 8.002 8.002 0 01-8 8.002A7.962 7.962 0 014.582 15H4v5" />

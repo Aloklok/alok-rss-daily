@@ -27,7 +27,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ articles, onOpenArticle, isLo
   return (
     <div className="p-4">
       <h2 className="text-2xl font-bold text-gray-900 mb-4">文章列表</h2>
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {articles.map((article) => (
           <div
             key={article.id}
