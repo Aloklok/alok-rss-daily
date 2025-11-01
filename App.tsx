@@ -106,7 +106,7 @@ const App: React.FC = () => {
         <div className="flex flex-col md:flex-row min-h-screen font-sans">
             <div
                 className={`relative transition-all duration-300 ease-in-out overflow-hidden ${
-                    isSidebarCollapsed ? 'md:w-0 w-0 transform -translate-x-full opacity-0 pointer-events-none' : 'md:w-80 w-full transform translate-x-0 opacity-100'
+                    isSidebarCollapsed ? 'w-0 h-0 md:h-auto transform -translate-x-full opacity-0 pointer-events-none' : 'w-full md:w-80 transform translate-x-0 opacity-100'
                 }`}
                 style={{ '--sidebar-width': isMdUp && !isSidebarCollapsed ? '320px' : '0px' } as React.CSSProperties}
             >
@@ -128,8 +128,13 @@ const App: React.FC = () => {
             {/* Control Buttons */}
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="fixed p-2 bg-white rounded-lg shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300"
-                style={{ top: '12px', left: '12px', transform: isMdUp && !isSidebarCollapsed ? 'translateX(305px)' : 'translateX(0)', transition: 'transform 0.3s ease-in-out', zIndex: 50 }}
+                className="fixed p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300"
+                style={{
+                    top: '16px',
+                    left: isMdUp && !isSidebarCollapsed ? '304px' : '12px',
+                    transition: 'left 0.3s ease-in-out',
+                    zIndex: 50
+                }}
             >
                 {isSidebarCollapsed ? (
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -137,21 +142,7 @@ const App: React.FC = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="2" /><path d="M9 4v16" strokeWidth="2" /></svg>
                 )}
             </button>
-            <button
-                onClick={combinedRefresh}
-                disabled={isLoading}
-                className="fixed flex flex-col items-center justify-center gap-1 px-2 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-sm text-white hover:from-blue-600 hover:to-indigo-700 focus:outline-none shadow-md hover:shadow-lg duration-300 transform hover:scale-105"
-                style={{ top: '64px', left: '12px', transform: isMdUp && !isSidebarCollapsed ? 'translateX(305px)' : 'translateX(0)', transition: 'transform 0.3s ease-in-out', zIndex: 50 }}
-            >
-                <div className="flex flex-col items-center justify-center">
-                    {isLoading ? (
-                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                    ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M4 4v5h.582A7 7 0 1011 18.418V17a1 1 0 112 0v3a1 1 0 01-1 1H6a1 1 0 01-1-1V17a1 1 0 112 0v1.418A7 7 0 104.582 9H4z" /></svg>
-                    )}
-                    <span className="mt-1" style={{ writingMode: 'vertical-lr', textOrientation: 'mixed' }}>{isLoading ? '正在更新' : '更新目录'}</span>
-                </div>
-            </button>
+
 
             {/* Main Content */}
             <div ref={mainContentRef} className="flex-1 bg-stone-50 w-full max-w-4xl mx-auto px-4 md:px-8">
