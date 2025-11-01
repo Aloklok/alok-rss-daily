@@ -128,7 +128,7 @@ const App: React.FC = () => {
             {/* Control Buttons */}
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="fixed p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300"
+                className={`fixed p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 ${isReaderVisible ? 'hidden' : ''}`}
                 style={{
                     top: '16px',
                     left: isMdUp && !isSidebarCollapsed ? '304px' : '12px',
@@ -145,7 +145,7 @@ const App: React.FC = () => {
 
 
             {/* Main Content */}
-            <div ref={mainContentRef} className="flex-1 bg-stone-50 w-full max-w-4xl mx-auto px-4 md:px-8">
+            <div ref={mainContentRef} className="flex-1 bg-stone-50 w-full max-w-4xl mx-auto px-2 md:px-8">
                 {isLoading ? (
                     <LoadingSpinner />
                 ) : sidebarArticle ? (

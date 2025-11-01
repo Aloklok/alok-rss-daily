@@ -252,11 +252,11 @@ interface ArticleCardProps {
 
 const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableTags, onReaderModeRequest, onStateChange }) => {
     const publishedDate = new Date(article.published).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
-    const allKeywords = [article.category, ...article.keywords];
+    const allKeywords = [...article.keywords];
     const isStarred = article.tags?.includes('user/-/state/com.google/starred') || false;
 
     return (
-        <article className="py-12 transition-opacity duration-300">
+        <article className="py-4 transition-opacity duration-300">
             <header className="mb-8">
                 <h3 className="text-3xl lg:text-4xl font-bold font-serif text-stone-900 mb-6 leading-tight flex items-center gap-x-3">
                     {isStarred && <span className="text-amber-400 text-2xl" title="已收藏">⭐️</span>}

@@ -34,7 +34,7 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, availableTags, on
     return (
         <div>
             {/* Table of Contents & Summary Section */}
-            <div className="bg-white/70 backdrop-blur-md p-6 rounded-2xl border border-stone-200/80 shadow-sm mb-10">
+            <div className="bg-white/70 backdrop-blur-md px-2 py-2 rounded-2xl border border-stone-200/80 shadow-sm mb-10">
                 <div className="md:hidden">
                     <h3 className="text-2xl font-bold font-serif text-stone-800 flex items-center">
                         <span>📚 目录</span>
@@ -170,14 +170,14 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
           const autoSelectedSlot = isToday ? getCurrentTimeSlot() : null;
 
           return (
-             <header className={`mb-12 bg-gradient-to-br ${randomGradient} rounded-2xl p-8 text-white shadow-lg`}>
+             <header className={`mb-6 md:mb-12 bg-gradient-to-br ${randomGradient} rounded-2xl p-4 md:p-8 text-white shadow-lg`}>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex-grow">
                         <div className="mb-4">
-                             <h1 className="text-5xl font-serif font-bold leading-none tracking-tight">
+                             <h1 className="text-4xl md:text-5xl font-serif font-bold leading-none tracking-tight">
                                 {isToday ? '今天' : datePart}
                             </h1>
-                             <div className="mt-3 inline-block bg-white/20 backdrop-blur-sm text-white/90 px-3 py-1.5 rounded-full text-lg font-medium">
+                             <div className="mt-2 md:mt-3 inline-block bg-white/20 backdrop-blur-sm text-white/90 px-3 py-1 rounded-full text-base md:text-lg font-medium">
                                 {isToday ? (
                                     <>
                                         <span>{datePart}</span>
@@ -190,13 +190,13 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
                             </div>
                         </div>
                         {isToday && (
-                            <p className="mt-6 text-xl md:text-xl font-serif font-bold tracking-tight text-white/95">
+                            <p className="mt-4 md:mt-6 text-lg md:text-xl font-serif font-bold tracking-tight text-white/95">
                                 {getGreeting()}，欢迎阅读今日简报。
                             </p>
                         )}
                     </div>
                     {activeFilter?.type === 'date' && (
-                         <div className="mt-6 md:mt-0 flex-shrink-0 flex items-center gap-2">
+                         <div className="mt-2 md:mt-0 flex-shrink-0 flex items-center gap-2">
                             <div className="bg-black/10 p-1.5 rounded-full flex gap-1">
                                 {(['morning','afternoon','evening'] as const).map(slotOption => {
                                     const labelMap: Record<'morning'|'afternoon'|'evening', string> = { morning: '早上', afternoon: '中午', evening: '晚上' };
@@ -205,7 +205,7 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
                                         <button
                                             key={slotOption}
                                             onClick={() => onTimeSlotChange(isSelected ? null : slotOption)}
-                                            className={`px-4 sm:px-5 py-2 text-base font-semibold rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-white/50 ${
+                                            className={`px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base font-semibold rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-white/50 ${
                                                 isSelected ? 'bg-white text-blue-600 shadow-md' : 'text-white/80 hover:bg-white/10'
                                             }`}
                                         >
@@ -224,7 +224,7 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
   }
 
   return (
-    <main className="flex-1 p-6 md:p-8 lg:p-10">
+    <main className="flex-1 px-2 py-2 md:p-8 lg:p-10">
       <div className="max-w-6xl mx-auto">
         {renderHeader()}
         

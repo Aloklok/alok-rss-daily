@@ -92,7 +92,7 @@ const ArticleDetail: React.FC<ArticleDetailProps> = ({ article, onClose }) => {
   }, [article]);
 
   return (
-    <div className="p-8">
+    <div className="p-2 md:p-8">
       {isLoading ? (
         <div className="flex items-center justify-center h-80">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
