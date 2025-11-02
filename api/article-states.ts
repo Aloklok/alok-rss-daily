@@ -1,14 +1,16 @@
+// /api/get-article-states.ts
+
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { apiHandler, getFreshRssClient } from './_utils.js';
 
+// 扩展接口以包含 annotations
 interface FreshRssItem {
     id: string;
     categories: string[];
-    tags?: string[];
+    annotations?: { id: string }[];
 }
 
 async function getArticleStates(req: VercelRequest, res: VercelResponse) {
-    // 从请求体获取 articleIds
     const { articleIds } = req.body;
     
     if (!Array.isArray(articleIds) || articleIds.length === 0) {
@@ -19,19 +21,26 @@ async function getArticleStates(req: VercelRequest, res: VercelResponse) {
     const formData = new URLSearchParams();
     articleIds.forEach(id => formData.append('i', String(id)));
     
+    // 使用 stream/items/contents 端点，它能返回 annotations
     const data = await freshRss.post<{ items: FreshRssItem[] }>('/stream/items/contents?output=json&excludeContent=1', formData);
-    const states: { [key:string]: string[] } = {};
+    
+    const states: { [key: string]: string[] } = {};
     if (data.items) {
         data.items.forEach((item: FreshRssItem) => {
-            // FreshRSS uses 'tags' for tags in this context
-           
-            const itemTags = (item.tags || []).filter(Boolean) as string[];
-            // Normalize tags to include the full path expected by the frontend for user-created tags
-            const normalizedTags = itemTags.map((tag: string) => {
-                if (tag.startsWith('user/-/state/')) return tag; // State tags are already in the correct format
-                return `user/1000/label/${tag}`; // Assume user tags need normalization
-            });
-            states[item.id] = normalizedTags;
+            // 1. 【核心修复】从 annotations 中提取状态标签
+            const annotationTags = (item.annotations || [])
+                .map(anno => anno.id)
+                .filter(Boolean);
+
+            // 2. 【核心修复】将 categories 和 annotationTags 合并
+            // categories 包含了分类和用户标签的底层 ID
+            const allTags = [
+                ...(item.categories || []),
+                ...annotationTags
+            ];
+            
+            // 3. 【核心修复】使用去重后的完整列表
+            states[item.id] = [...new Set(allTags)];
         });
     }
 

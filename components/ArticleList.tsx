@@ -1,13 +1,17 @@
+// components/ArticleList.tsx
+
 import React from 'react';
 import { Article } from '../types';
+import { useArticleStore } from '../store/articleStore';
 
 interface ArticleListProps {
-  articles: Article[];
+  articleIds: (string | number)[]; // Now receives IDs
   onOpenArticle: (article: Article) => void;
   isLoading: boolean;
 }
 
-const ArticleList: React.FC<ArticleListProps> = ({ articles, onOpenArticle, isLoading }) => {
+const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, isLoading }) => {
+  // 1. 先处理加载状态
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-80">
@@ -16,6 +20,11 @@ const ArticleList: React.FC<ArticleListProps> = ({ articles, onOpenArticle, isLo
     );
   }
 
+  // 2. 从 Store 中订阅并重构文章列表
+  const articlesById = useArticleStore((state) => state.articlesById);
+  const articles = articleIds.map(id => articlesById[id]).filter(Boolean) as Article[];
+
+  // 3. 然后处理空状态
   if (articles.length === 0) {
     return (
       <div className="p-8 text-center text-gray-500">
@@ -24,6 +33,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ articles, onOpenArticle, isLo
     );
   }
 
+  // 4. 最后渲染列表
   return (
     <div className="p-4">
       <h2 className="text-2xl font-bold text-gray-900 mb-4">文章列表</h2>

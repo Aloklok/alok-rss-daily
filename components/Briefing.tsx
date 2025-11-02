@@ -1,16 +1,17 @@
+// components/Briefing.tsx
+
 import React, { useMemo } from 'react';
 import { Article, BriefingReport, Tag, Filter } from '../types';
-import ArticleGroup from './ArticleGroup'; // Import the new component
+import ArticleGroup from './ArticleGroup';
 
-// The ReportContent component is now much simpler.
 interface ReportContentProps {
-    report: BriefingReport;
-    availableTags: Tag[];
+    report: BriefingReport[]; 
+    availableUserTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
-    onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
+    onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
 }
 
-const ReportContent: React.FC<ReportContentProps> = ({ report, availableTags, onReaderModeRequest, onStateChange }) => {
+const ReportContent: React.FC<ReportContentProps> = ({ report, availableUserTags, onReaderModeRequest, onStateChange }) => {
     const importanceOrder = ['重要新闻', '必知要闻', '常规更新'];
 
     const handleJump = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
@@ -94,7 +95,7 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, availableTags, on
                         key={importance}
                         importance={importance}
                         articles={report.articles[importance]}
-                        availableTags={availableTags}
+                        availableUserTags={availableUserTags}
                         onReaderModeRequest={onReaderModeRequest}
                         onStateChange={onStateChange}
                     />
@@ -104,16 +105,15 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, availableTags, on
     );
 };
 
-// The main Briefing component remains largely the same.
 interface BriefingProps {
   reports: BriefingReport[];
   activeFilter: Filter | null;
   timeSlot: 'morning' | 'afternoon' | 'evening' | null;
   selectedReportId: number | null;
-  availableTags: Tag[];
+  availableUserTags: Tag[];
   onReportSelect: (id: number) => void;
   onReaderModeRequest: (article: Article) => void;
-  onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
+  onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
   onResetFilter: () => void;
   onTimeSlotChange: (slot: 'morning' | 'afternoon' | 'evening' | null) => void;
   isSidebarCollapsed: boolean;
@@ -126,7 +126,7 @@ const GRADIENTS = [
     'from-lime-400 via-emerald-500 to-cyan-500'
 ];
 
-const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, selectedReportId, availableTags, onReportSelect, onReaderModeRequest, onStateChange, onResetFilter, onTimeSlotChange, isSidebarCollapsed, onToggleSidebar }) => {
+const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, selectedReportId, availableUserTags, onReportSelect, onReaderModeRequest, onStateChange, onResetFilter, onTimeSlotChange, isSidebarCollapsed, onToggleSidebar }) => {
   const selectedReport = reports.find(r => r.id === selectedReportId);
 
   const randomGradient = useMemo(() => {
@@ -248,7 +248,7 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
                     <ReportContent 
                         key={report.id} 
                         report={report} 
-                        availableTags={availableTags}
+                        availableUserTags={availableUserTags}
                         onReaderModeRequest={onReaderModeRequest}
                         onStateChange={onStateChange}
                     />

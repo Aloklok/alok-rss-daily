@@ -1,6 +1,20 @@
+// hooks/useDataFetching.ts
+
 import { useState, useEffect, useCallback } from 'react';
 import { BriefingReport, Article, Filter, GroupedArticles } from '../types';
-import { getBriefingReportsByDate, getArticlesByLabel, getArticleStates, getTodayInShanghai } from '../services/api';
+import { getBriefingReportsByDate, getArticlesByLabel, getArticlesDetails, getArticleStates, getTodayInShanghai } from '../services/api';
+import { useArticleStore } from '../store/articleStore';
+
+// --- 数据融合辅助函数 (FreshRSS -> Supabase) ---
+async function mergeArticlesWithDetails(freshArticles: Article[]): Promise<Article[]> {
+    if (!freshArticles || freshArticles.length === 0) return [];
+    const articleIds = freshArticles.map(a => a.id);
+    const supaDetailsById = await getArticlesDetails(articleIds);
+    return freshArticles.map(freshArticle => {
+        const supaDetails = supaDetailsById[freshArticle.id];
+        return supaDetails ? { ...supaDetails, ...freshArticle } : freshArticle;
+    });
+}
 
 interface UseDataFetchingProps {
     activeFilter: Filter | null;
@@ -8,131 +22,83 @@ interface UseDataFetchingProps {
 }
 
 export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetchingProps) => {
-    const [reports, setReports] = useState<BriefingReport[]>([]);
-    const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
+    const [reportStructure, setReportStructure] = useState<any>(null);
+    const [filteredArticleIds, setFilteredArticleIds] = useState<(string | number)[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
     const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
+    const addArticles = useArticleStore((state) => state.addArticles);
 
     const fetchData = useCallback(async (filter: Filter, slotOverride?: 'morning' | 'afternoon' | 'evening' | null) => {
         if (!filter) return;
         setIsLoading(true);
 
-        // All sessionStorage logic is removed. The service worker will handle caching.
-
         if (filter.type === 'date') {
-            setFilteredArticles([]);
-            setReports([]);
-            setSelectedReportId(null);
+            setFilteredArticleIds([]);
             try {
                 const fetchedReports = await getBriefingReportsByDate(filter.value, slotOverride || undefined);
-                const allArticles = fetchedReports.flatMap(report => Object.values(report.articles).flat());
-                const articleIds = allArticles.map(article => article.id);
+                const supaArticles = fetchedReports.flatMap(report => Object.values(report.articles).flat());
 
-                if (articleIds.length > 0) {
-                    const states = await getArticleStates(articleIds);
-                    const reportsWithStates = fetchedReports.map(report => ({
-                        ...report,
-                        articles: Object.entries(report.articles).reduce((acc, [importance, articles]) => {
-                            acc[importance] = articles.map(article => ({
-                                ...article,
-                                tags: states[String(article.id)] || []
-                            }));
-                            return acc;
-                        }, {} as GroupedArticles)
+                if (supaArticles.length > 0) {
+                    const articleIds = supaArticles.map(a => a.id);
+                    // 【核心修复】假设 getArticleStates 返回的是一个包含 categories 和 annotations 的对象
+                    // 如果它只返回 tags，我们需要修改 getArticleStates 的后端
+                    // 这里我们假设它返回的是完整的 tags 数组（已在后端修复）
+                    const tagsById = await getArticleStates(articleIds);
+
+                    const completeArticles = supaArticles.map(supaArticle => ({
+                        ...supaArticle,
+                        tags: tagsById[supaArticle.id] || [],
                     }));
-                    setReports(reportsWithStates);
-                    if (isInitialLoad && reportsWithStates.length > 0) {
-                        setSelectedReportId(reportsWithStates[0].id);
-                    }
-                } else {
-                    setReports(fetchedReports);
-                    if (isInitialLoad && fetchedReports.length > 0) {
-                        setSelectedReportId(fetchedReports[0].id);
-                    }
+                    
+                    addArticles(completeArticles);
                 }
+                
+                const reportStruct = fetchedReports.map(report => ({
+                    id: report.id,
+                    title: report.title,
+                    articles: Object.fromEntries(
+                        Object.entries(report.articles).map(([key, articles]) => [
+                            key,
+                            articles.map(a => a.id)
+                        ])
+                    )
+                }));
+                setReportStructure(reportStruct);
+                
             } catch (error) {
                 console.error(`Failed to fetch data for date filter`, error);
-                setReports([]);
-                setSelectedReportId(null);
+                setReportStructure(null);
             } finally {
                 setIsLoading(false);
             }
         } else if (filter.type === 'category' || filter.type === 'tag') {
-            setReports([]);
-            setSelectedReportId(null);
+            setReportStructure(null);
             try {
-                const articles = await getArticlesByLabel(filter);
-                const articleIds = articles.map(article => article.id);
-
-                if (articleIds.length > 0) {
-                    const states = await getArticleStates(articleIds);
-                    const articlesWithStates = articles.map(article => ({
-                        ...article,
-                        tags: states[String(article.id)] || []
-                    }));
-                    setFilteredArticles(articlesWithStates);
-                } else {
-                    setFilteredArticles([]);
-                }
+                const freshArticles = await getArticlesByLabel(filter);
+                const mergedArticles = await mergeArticlesWithDetails(freshArticles);
+                
+                addArticles(mergedArticles);
+                setFilteredArticleIds(mergedArticles.map(a => a.id));
             } catch (error) {
                 console.error(`Failed to fetch data for ${filter.type} filter`, error);
-                setFilteredArticles([]);
+                setFilteredArticleIds([]);
             } finally {
                 setIsLoading(false);
             }
-        } else if (filter.type === 'starred' || filter.type === 'starredArticle') {
-            setReports([]);
-            setFilteredArticles([]);
-            setSelectedReportId(null);
-            setIsLoading(false);
         } else {
-            // Ensure loading is always stopped for any other filter type or null filter
             setIsLoading(false);
         }
-    }, []);
+    }, [addArticles]);
 
     useEffect(() => {
         if (isInitialLoad || !activeFilter) return;
-    
-        const fetchDataForDate = (isToday: boolean) => {
-            if (isToday) {
-                if (timeSlot) {
-                    fetchData(activeFilter, timeSlot);
-                } else {
-                    const shanghaiHour = new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Shanghai' })
-                        .formatToParts(new Date())
-                        .find(p => p.type === 'hour')?.value;
-                    const hourNum = shanghaiHour ? parseInt(shanghaiHour, 10) : new Date().getHours();
-                    let autoSlot: 'morning' | 'afternoon' | 'evening' | null = null;
-                    if (hourNum >= 0 && hourNum < 12) autoSlot = 'morning';
-                    else if (hourNum >= 12 && hourNum < 19) autoSlot = 'afternoon';
-                    else autoSlot = 'evening';
-                    setTimeSlot(autoSlot);
-                    fetchData(activeFilter, autoSlot);
-                }
-            } else {
-                setTimeSlot(null);
-                fetchData(activeFilter, null);
-            }
-        };
-
-        if (activeFilter.type === 'date') {
-            const today = getTodayInShanghai();
-            fetchDataForDate(today ? activeFilter.value === today : false);
-        } else {
-            fetchData(activeFilter);
-        }
+        fetchData(activeFilter);
     }, [activeFilter, isInitialLoad, fetchData]);
 
     return {
-        reports,
-        setReports,
-        filteredArticles,
-        setFilteredArticles,
+        reportStructure,
+        filteredArticleIds,
         isLoading,
-        selectedReportId,
-        setSelectedReportId,
         timeSlot,
         setTimeSlot,
         fetchData,

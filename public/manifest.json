@@ -3,13 +3,8 @@
   "name": "Personal RSS Briefing Hub",
   "icons": [
     {
-      "src": "https://picsum.photos/192/192",
-      "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "https://picsum.photos/512/512",
-      "type": "image/png",
+      "src": "/1.jpg",
+      "type": "image/jpeg",
       "sizes": "512x512"
     }
   ],

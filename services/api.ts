@@ -1,39 +1,5 @@
 import { Article, BriefingReport, Tag, CleanArticleContent, AvailableFilters, Filter } from '../types';
 
-// --- Reusable Toast Notification Utility ---
-const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    if (typeof window === 'undefined') return;
-
-    const toast = document.createElement('div');
-    toast.textContent = message;
-    toast.style.position = 'fixed';
-    toast.style.bottom = '20px';
-    toast.style.right = '20px';
-    toast.style.backgroundColor = type === 'success' ? '#4CAF50' : '#F44336';
-    toast.style.color = 'white';
-    toast.style.padding = '12px 24px';
-    toast.style.borderRadius = '6px';
-    toast.style.zIndex = '1001';
-    toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-    toast.style.opacity = '0';
-    toast.style.transition = 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out';
-    toast.style.transform = 'translateY(20px)';
-    
-    document.body.appendChild(toast);
-
-    // Animate in
-    setTimeout(() => {
-        toast.style.opacity = '1';
-        toast.style.transform = 'translateY(0)';
-    }, 10);
-
-    // Animate out and remove
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(20px)';
-        setTimeout(() => document.body.removeChild(toast), 300);
-    }, 3000);
-};
 
 
 // --- Centralized API Service ---
@@ -79,6 +45,41 @@ const apiService = {
     },
 };
 
+// --- Reusable Toast Notification Utility ---
+export const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    if (typeof window === 'undefined') return;
+
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.position = 'fixed';
+    toast.style.bottom = '20px';
+    toast.style.right = '20px';
+    toast.style.backgroundColor = type === 'success' ? '#4CAF50' : '#F44336';
+    toast.style.color = 'white';
+    toast.style.padding = '12px 24px';
+    toast.style.borderRadius = '6px';
+    toast.style.zIndex = '1001';
+    toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out';
+    toast.style.transform = 'translateY(20px)';
+    
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    }, 10);
+
+    // Animate out and remove
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(() => document.body.removeChild(toast), 300);
+    }, 3000);
+};
+
 // --- Helper for Shanghai Timezone ---
 export const getTodayInShanghai = (): string => {
     const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -106,6 +107,18 @@ export const getBriefingReportsByDate = async (date: string, slot?: 'morning' | 
     } catch {
         return [];
     }
+};
+
+export const getArticlesDetails = (articleIds: (string | number)[]): Promise<Record<string, Article>> => {
+    if (!articleIds || articleIds.length === 0) {
+        return Promise.resolve({});
+    }
+    // 使用 URLSearchParams 来正确处理数组参数
+    const params = new URLSearchParams();
+    articleIds.forEach(id => params.append('articleIds', String(id)));
+    
+    // 调用我们刚刚修改的 get-briefings 端点
+    return apiService.request<Record<string, Article>>(`/api/get-briefings?${params.toString()}`);
 };
 
 export const markAllAsRead = (articleIds: (string | number)[]): Promise<void> => {
