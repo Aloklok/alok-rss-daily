@@ -35,9 +35,11 @@ export function getFreshRssClient(): FreshRssClient {
             'Authorization': `GoogleLogin auth=${authToken}`,
         };
 
-        const request = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
-            const url = `${apiUrl}/greader.php/reader/api/0${path}`;
-            const response = await fetch(url, { ...options, headers });
+        const request = async <T>(path: string, options: RequestInit = {}, params: Record<string, string> = {}): Promise<T> => {
+            const url = new URL(`${apiUrl}/greader.php/reader/api/0${path}`);
+            Object.entries(params).forEach(([key, value]) => url.searchParams.append(key, value));
+            
+            const response = await fetch(url.toString(), { ...options, headers });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`FreshRSS API Error: ${response.status} ${errorText}`);
@@ -51,8 +53,7 @@ export function getFreshRssClient(): FreshRssClient {
 
         freshRssClient = {
             get: <T>(path: string, params: Record<string, string> = {}): Promise<T> => {
-                const url = new URLSearchParams(params);
-                return request<T>(`${path}?${url.toString()}`);
+                return request<T>(path, {}, params);
             },
             post: <T>(path: string, body: URLSearchParams): Promise<T> => {
                 return request<T>(path, {

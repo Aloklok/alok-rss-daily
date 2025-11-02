@@ -1,15 +1,14 @@
 import { useState, useCallback } from 'react';
 import { Article, BriefingReport, GroupedArticles, Filter } from '../types';
 import { editArticleState, editArticleTag, markAllAsRead as apiMarkAllAsRead } from '../services/api';
-import { getCacheKey } from './useDataFetching'; // Import getCacheKey
 
 interface UseArticleManagementProps {
     reports: BriefingReport[];
     setReports: React.Dispatch<React.SetStateAction<BriefingReport[]>>;
     filteredArticles: Article[];
     setFilteredArticles: React.Dispatch<React.SetStateAction<Article[]>>;
-    activeFilter: Filter | null; // Add activeFilter
-    timeSlot: 'morning' | 'afternoon' | 'evening' | null; // Add timeSlot
+    activeFilter: Filter | null;
+    timeSlot: 'morning' | 'afternoon' | 'evening' | null;
 }
 
 export const useArticleManagement = ({
@@ -17,8 +16,6 @@ export const useArticleManagement = ({
     setReports,
     filteredArticles,
     setFilteredArticles,
-    activeFilter,
-    timeSlot,
 }: UseArticleManagementProps) => {
     const [isMarkingAsRead, setIsMarkingAsRead] = useState(false);
 
@@ -78,90 +75,63 @@ export const useArticleManagement = ({
             setReports(updatedReports);
             setFilteredArticles(updatedFilteredArticles);
 
-            // Update sessionStorage cache
-            if (activeFilter) {
-                const cacheKey = getCacheKey(activeFilter, timeSlot);
-                if (cacheKey) {
-                    if (activeFilter.type === 'date') {
-                        sessionStorage.setItem(cacheKey, JSON.stringify({ reports: updatedReports, selectedReportId: reports.length > 0 ? reports[0].id : null }));
-                    } else if (activeFilter.type === 'category' || activeFilter.type === 'tag') {
-                        sessionStorage.setItem(cacheKey, JSON.stringify({ articles: updatedFilteredArticles }));
-                    }
-                    console.log(`useArticleManagement: Updated cache for ${cacheKey} after state change.`);
-                }
-            }
+            // The service worker will handle caching automatically. No need for manual cache updates.
 
         } catch (error) {
             console.error("Failed to update article state. UI will not be changed.", error);
         }
-    }, [reports, setReports, filteredArticles, setFilteredArticles, activeFilter, timeSlot]);
+    }, [reports, setReports, filteredArticles, setFilteredArticles]);
 
-    const handleMarkAllAsRead = useCallback(async (activeFilterType: Filter['type']) => {
+    const handleMarkAllAsRead = useCallback(async (context: Filter['type'] | 'singleArticle', articleIdsToMark?: (string | number)[]) => {
         setIsMarkingAsRead(true);
         try {
-            let articleIds: (string | number)[] = [];
-            
-            if (activeFilterType === 'date' && reports.length > 0) {
-                articleIds = reports.flatMap(report => 
+            let finalArticleIds: (string | number)[] = [];
+
+            if (context === 'singleArticle' && articleIdsToMark) {
+                finalArticleIds = articleIdsToMark;
+            } else if (context === 'date' && reports.length > 0) {
+                finalArticleIds = reports.flatMap(report => 
                     Object.values(report.articles).flat().map(article => article.id)
                 );
-            } else if (filteredArticles.length > 0) {
-                articleIds = filteredArticles.map(article => article.id);
-            }
-            
-            await apiMarkAllAsRead(articleIds);
-            
-            let updatedReports = reports;
-            let updatedFilteredArticles = filteredArticles;
-
-            if (activeFilterType === 'date' && reports.length > 0) {
-                updatedReports = prevReports => 
-                    prevReports.map(report => ({
-                        ...report,
-                        articles: Object.keys(report.articles).reduce((acc, key) => {
-                            acc[key] = report.articles[key].map(article => {
-                                if (!articleIds.includes(article.id) || article.tags.includes('user/-/state/com.google/read')) {
-                                    return article;
-                                }
-                                return { ...article, tags: [...article.tags, 'user/-/state/com.google/read'] };
-                            });
-                            return acc;
-                        }, {} as GroupedArticles)
-                    }));
-                setReports(updatedReports);
-            }
-            
-            if (filteredArticles.length > 0) {
-                updatedFilteredArticles = prevArticles => 
-                    prevArticles.map(article => {
-                        if (!articleIds.includes(article.id) || article.tags.includes('user/-/state/com.google/read')) {
-                            return article;
-                        }
-                        return { ...article, tags: [...article.tags, 'user/-/state/com.google/read'] };
-                    })
-                ;
-                setFilteredArticles(updatedFilteredArticles);
+            } else if ((context === 'category' || context === 'tag') && filteredArticles.length > 0) {
+                finalArticleIds = filteredArticles.map(article => article.id);
             }
 
-            // Update sessionStorage cache
-            if (activeFilter) {
-                const cacheKey = getCacheKey(activeFilter, timeSlot);
-                if (cacheKey) {
-                    if (activeFilter.type === 'date') {
-                        sessionStorage.setItem(cacheKey, JSON.stringify({ reports: updatedReports, selectedReportId: reports.length > 0 ? reports[0].id : null }));
-                    } else if (activeFilter.type === 'category' || activeFilter.type === 'tag') {
-                        sessionStorage.setItem(cacheKey, JSON.stringify({ articles: updatedFilteredArticles }));
-                    }
-                    console.log(`useArticleManagement: Updated cache for ${cacheKey} after marking all as read.`);
+            if (finalArticleIds.length === 0) {
+                setIsMarkingAsRead(false);
+                return 0; // Return 0 articles marked as read
+            }
+            
+            await apiMarkAllAsRead(finalArticleIds);
+            
+            const markAsRead = (article: Article) => {
+                if (!finalArticleIds.includes(article.id) || article.tags.includes('user/-/state/com.google/read')) {
+                    return article;
                 }
-            }
+                return { ...article, tags: [...article.tags, 'user/-/state/com.google/read'] };
+            };
+
+            const updatedReports = reports.map(report => ({
+                ...report,
+                articles: Object.keys(report.articles).reduce((acc, key) => {
+                    acc[key] = report.articles[key].map(markAsRead);
+                    return acc;
+                }, {} as GroupedArticles)
+            }));
+            setReports(updatedReports);
+            
+            const updatedFilteredArticles = filteredArticles.map(markAsRead);
+            setFilteredArticles(updatedFilteredArticles);
+            
+            return finalArticleIds.length; // Return the count of articles marked as read
 
         } catch (error) {
             console.error("UI: Failed to mark all as read.", error);
+            return 0; // Return 0 on error
         } finally {
             setIsMarkingAsRead(false);
         }
-    }, [reports, setReports, filteredArticles, setFilteredArticles, activeFilter, timeSlot]);
+    }, [reports, setReports, filteredArticles, setFilteredArticles]);
 
     return {
         isMarkingAsRead,

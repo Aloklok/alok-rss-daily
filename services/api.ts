@@ -181,12 +181,13 @@ export const editArticleTag = async (articleId: string | number, tagsToAdd: stri
 
 export const getArticlesByLabel = (filter: Filter): Promise<Article[]> => {
     return apiService.request<Article[]>('/api/articles-categories-tags', {
-        params: { name: filter.value },
+        params: { value: filter.value },
     }).catch(() => []);
 };
 
 export const getStarredArticles = (): Promise<Article[]> => {
-    return apiService.request<Article[]>('/api/starred').catch(() => []);
+    // Reuse getArticlesByLabel with the specific stream ID for starred articles
+    return getArticlesByLabel({ type: 'starred', value: 'user/-/state/com.google/starred' });
 };
 
 export const getAvailableFilters = (): Promise<AvailableFilters> => {

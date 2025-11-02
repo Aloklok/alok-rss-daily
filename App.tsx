@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import Briefing from './components/Briefing';
 import ReaderView from './components/ReaderView';
 import ArticleDetail from './components/ArticleDetail';
 import ArticleList from './components/ArticleList';
-import { Tag } from './types';
+import { Article, Tag } from './types';
 import { getTags } from './services/api';
 
 // Import custom hooks
@@ -19,10 +19,118 @@ const LoadingSpinner: React.FC = () => (
     </div>
 );
 
+interface ToastProps {
+    message: string;
+    isVisible: boolean;
+    onClose: () => void;
+    type?: 'success' | 'error' | 'info';
+}
+
+const Toast: React.FC<ToastProps> = ({ message, isVisible, onClose, type = 'info' }) => {
+    if (!isVisible) return null;
+
+    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-gray-800';
+    const icon = type === 'success' ? (
+        <svg className="w-6 h-6 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+    ) : type === 'error' ? (
+        <svg className="w-6 h-6 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+            <path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+    ) : (
+        <svg className="w-6 h-6 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+            <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+    );
+
+    return (
+        <div 
+            className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center p-4 rounded-lg shadow-lg text-white transition-all duration-300 transform ${bgColor}`}
+            style={{ opacity: isVisible ? 1 : 0, transform: `translate(-50%, ${isVisible ? '0' : '20px'})` }}
+        >
+            {icon}
+            <span className="ml-3 font-medium">{message}</span>
+            <button onClick={onClose} className="ml-4 -mr-1 p-1.5 rounded-full hover:bg-white/20 transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+    );
+};
+
+interface TagPopoverProps {
+    article: Article;
+    availableTags: Tag[];
+    onClose: () => void;
+    onStateChange: (articleId: string | number, newTags: string[]) => Promise<void>;
+}
+
+const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose, onStateChange }) => {
+    const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set(article.tags?.filter(t => !t.startsWith('user/-/state')).map(t => t.replace(/\/\d+\//, '/-/')) || []));
+    const [isSaving, setIsSaving] = useState(false);
+    const popoverRef = useRef<HTMLDivElement>(null);
+
+    const handleTagChange = (tagId: string) => {
+        setSelectedTags(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(tagId)) newSet.delete(tagId);
+            else newSet.add(tagId);
+            return newSet;
+        });
+    };
+
+    const handleConfirm = async () => {
+        setIsSaving(true);
+        const stateTags = (article.tags || []).filter(t => t && t.startsWith('user/-/state'));
+        const newTags = [...stateTags, ...Array.from(selectedTags)];
+        try {
+            await onStateChange(article.id, newTags);
+            onClose();
+        } catch (error) {
+            console.error("Failed to save tags", error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div ref={popoverRef} className="absolute bottom-full mb-2 w-64 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 right-0 md:left-1/2 md:-translate-x-1/2" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b"><h4 className="font-semibold text-gray-800">编辑标签</h4></div>
+            {availableTags.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">暂无可用标签。</div>
+            ) : (
+                <div className="p-4 max-h-60 overflow-y-auto">
+                    <div className="space-y-3">
+                        {availableTags.map(tag => (
+                            <label key={tag.id} className="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" checked={selectedTags.has(tag.id)} onChange={() => handleTagChange(tag.id)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                <span className="text-gray-700">{tag.label}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
+            <div className="p-3 bg-gray-50 flex justify-end space-x-2 rounded-b-lg">
+                <button onClick={onClose} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
+                <button onClick={handleConfirm} disabled={isSaving} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:bg-blue-300">{isSaving ? '保存中...' : '确认'}</button>
+            </div>
+        </div>
+    );
+};
+
 const App: React.FC = () => {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
     const [isMdUp, setIsMdUp] = useState<boolean>(false);
     const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+    const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' | 'info' }>({ isVisible: false, message: '', type: 'info' });
+
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToast({ isVisible: true, message, type });
+        const timer = setTimeout(() => {
+            setToast(prev => ({ ...prev, isVisible: false }));
+        }, 3000); // Hide after 3 seconds
+        return () => clearTimeout(timer);
+    }, []);
 
     // Use custom hooks
     const { 
@@ -36,6 +144,7 @@ const App: React.FC = () => {
         handleFilterChange,
         handleResetFilter,
         refreshFilters,
+        clearActiveFilterAndCache, // Get the new function
     } = useFilters();
 
     const { 
@@ -91,10 +200,11 @@ const App: React.FC = () => {
 
     // Fetch available tags for TagPopover
     useEffect(() => {
-        setAvailableTags(availableFilters.tags.map(tag => ({ id: `user/-/label/${tag}`, label: tag })));
+        setAvailableTags(availableFilters.tags.map(tag => ({ id: tag.id, label: tag.label })));
     }, [availableFilters.tags]);
 
     const mainContentRef = useRef<HTMLDivElement | null>(null);
+    const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
 
     const handleScrollToTop = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -114,6 +224,15 @@ const App: React.FC = () => {
             document.body.style.overflow = '';
         };
     }, [isSidebarCollapsed, isMdUp]);
+
+    // Effect to handle /now URL for immediate navigation to today's briefing
+    useEffect(() => {
+        if (window.location.pathname === '/now') {
+            handleResetFilter();
+            // Replace the URL to / without triggering another reload
+            window.history.replaceState(null, '', '/');
+        }
+    }, [handleResetFilter]);
 
     return (
         <div className="flex flex-col md:flex-row min-h-screen font-sans">
@@ -135,7 +254,7 @@ const App: React.FC = () => {
                 `}
             >
                 <Sidebar 
-                    dates={datesForMonth}
+                    dates={datesForMonth} // Pass datesForMonth here
                     isLoading={isLoading}
                     availableMonths={availableMonths}
                     selectedMonth={selectedMonth}
@@ -144,14 +263,17 @@ const App: React.FC = () => {
                     activeFilter={activeFilter}
                     onFilterChange={(filter) => {
                         handleFilterChange(filter);
+                        handleCloseArticleDetail();
+                        // The clearing of sessionStorage for activeFilter is now handled by clearActiveFilterAndCache
+                        // when navigating to an article detail.
                         if (!isMdUp) setIsSidebarCollapsed(true); // Auto-close on mobile after selection
                     }}
                     onOpenArticle={(article) => {
                         handleShowArticleInMain(article);
+                        clearActiveFilterAndCache(); // Clear active filter when opening an article
                         if (!isMdUp) setIsSidebarCollapsed(true); // Auto-close on mobile
                     }}
                     onRefresh={combinedRefresh}
-                    datesForMonth={datesForMonth}
                 />
             </div>
 
@@ -214,23 +336,61 @@ const App: React.FC = () => {
                 
                 {/* Floating Action Buttons */}
                 <div className="fixed bottom-8 right-8 z-20 flex flex-col-reverse items-center gap-y-3">
-                     <button onClick={handleScrollToTop} className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all" aria-label="Back to top">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-                    </button>
-                    <button onClick={() => handleMarkAllAsRead(activeFilter?.type || 'date')} disabled={isMarkingAsRead} className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all disabled:bg-gray-500" aria-label="Mark all as read">
+                    <button 
+                        onClick={async () => {
+                            let markedCount = 0;
+                            if (sidebarArticle) {
+                                markedCount = await handleMarkAllAsRead('singleArticle', [sidebarArticle.id]);
+                            } else {
+                                markedCount = await handleMarkAllAsRead(activeFilter?.type || 'date');
+                            }
+                            if (markedCount > 0) {
+                                showToast(`已将 ${markedCount} 篇文章设为已读`, 'success');
+                            } else {
+                                showToast('没有新的文章需要标记为已读。', 'info');
+                            }
+                        }} 
+                        disabled={isMarkingAsRead} 
+                        className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all disabled:bg-gray-500" 
+                        aria-label="Mark all as read"
+                    >
                         {isMarkingAsRead ? (
                             <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         ) : (
                              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         )}
                     </button>
-                </div>
+                    <button onClick={handleScrollToTop} className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all" aria-label="Back to top">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                    </button>
+                    {sidebarArticle && (
+                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className="p-3 bg-sky-600 text-white rounded-full shadow-lg hover:bg-sky-700 transition-all" aria-label="Tag article">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                            </button>
+                            {isTagPopoverOpen && sidebarArticle && (
+                                <TagPopover 
+                                    article={sidebarArticle} 
+                                    availableTags={availableTags} 
+                                    onClose={() => setIsTagPopoverOpen(false)} 
+                                    onStateChange={handleArticleStateChange} 
+                                />
+                            )}
+                        </div>
+                    )}
+                </div> {/* Closing tag for Floating Action Buttons */}
 
                 <ReaderView 
                     isVisible={isReaderVisible}
                     isLoading={isReaderLoading}
                     content={readerContent}
                     onClose={handleCloseReader}
+                />
+                <Toast 
+                    message={toast.message} 
+                    isVisible={toast.isVisible} 
+                    onClose={() => setToast(prev => ({ ...prev, isVisible: false }))}
+                    type={toast.type}
                 />
             </div>
         </div>

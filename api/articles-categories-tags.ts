@@ -24,14 +24,14 @@ function mapFreshItemToMinimalArticle(item: any): Article {
 }
 
 async function getArticlesByLabel(req: VercelRequest, res: VercelResponse) {
-    const { name } = req.query;
+    // The `value` from the client is the full, original streamId from FreshRSS
+    const { value: streamId } = req.query;
 
-    if (!name || typeof name !== 'string') {
-        return res.status(400).json({ message: 'Folder/tag name is required.' });
+    if (!streamId || typeof streamId !== 'string') {
+        return res.status(400).json({ message: 'Stream ID is required.' });
     }
 
     const freshRss = getFreshRssClient();
-    const streamId = `user/-/label/${encodeURIComponent(name)}`;
     const data = await freshRss.get<{ items: any[] }>(`/stream/contents/${streamId}`, {
         output: 'json',
         excludeContent: '1'

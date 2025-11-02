@@ -242,13 +242,18 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
       <div className="max-w-6xl mx-auto">
         {renderHeader()}
         
-        {selectedReport ? (
-            <ReportContent 
-                report={selectedReport} 
-                availableTags={availableTags}
-                onReaderModeRequest={onReaderModeRequest}
-                onStateChange={onStateChange}
-            />
+        {reports.length > 0 ? (
+            <div className="space-y-10">
+                {reports.map(report => (
+                    <ReportContent 
+                        key={report.id} 
+                        report={report} 
+                        availableTags={availableTags}
+                        onReaderModeRequest={onReaderModeRequest}
+                        onStateChange={onStateChange}
+                    />
+                ))}
+            </div>
         ) : (
           <div className="text-center py-20">
             <p className="text-2xl font-semibold text-stone-600">

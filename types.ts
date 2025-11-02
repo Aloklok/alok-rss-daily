@@ -46,10 +46,9 @@ export interface CleanArticleContent {
 }
 
 export interface AvailableFilters {
-  categories: string[];
-  tags: string[];
+    categories: { id: string; label: string }[];
+    tags: { id: string; label: string }[];
 }
-
 export type Filter = {
   type: 'date' | 'category' | 'tag' | 'starred';
   value: string;

@@ -4,6 +4,10 @@
 
 Briefing Hub 是一个基于 React 和 TypeScript 构建的应用程序，使用 Supabase 和 FreshRSS 作为后端服务。它提供了一个简洁的界面来浏览每日简报、文章分类和标签管理等功能。
 
+## 渐进式 Web 应用 (PWA)
+
+Briefing Hub 已实现渐进式 Web 应用 (PWA) 功能，支持离线访问和更快的加载体验。通过 Service Worker，应用能够缓存静态资源和 API 数据，提供可靠的离线工作能力和优化的网络性能。
+
 ## 开发命令
 
 - `vercel dev` - 启动开发服务器 (在 Vercel 环境下)
@@ -36,7 +40,7 @@ Briefing Hub 是一个基于 React 和 TypeScript 构建的应用程序，使用
 
 ### 自定义 Hooks (逻辑层)
 - **`useFilters`**: 管理所有与筛选器（日期、分类、标签）相关的状态和逻辑。
-- **`useDataFetching`**: 负责根据当前筛选器获取简报和文章数据，并管理加载状态。
+- **`useDataFetching`**: 负责根据当前筛选器获取简报和文章数据，并管理加载状态。它还管理 `timeSlot` 状态，该状态将一天分为“上午”、“下午”和“晚上”，用于更精细的日期筛选。
 - **`useArticleManagement`**: 封装文章状态（已读、收藏、标签）的更新逻辑。
 - **`useReader`**: 管理阅读器视图（Reader View）的显示状态和内容加载。
 - **`useSidebar`**: 管理侧边栏的内部状态，如标签页切换和收藏夹的加载。
@@ -59,7 +63,7 @@ Briefing Hub 是一个基于 React 和 TypeScript 构建的应用程序，使用
 
 - **集中式请求处理器**: 一个内部的 `apiService` 对象处理所有的 `fetch` 调用，统一了 URL 构建、请求头和错误处理。
 - **统一的用户通知**: 服务层集成了 `showToast` 工具，可以在 API 请求成功（如更新标签）或失败时，向用户显示美观的 Toast 通知。
-- **性能缓存**: `getCleanArticleContent` 函数内置了内存缓存，避免了在同一会话中对同一篇文章的重复网络请求。
+- **性能缓存**: 应用采用多层缓存策略。API 数据请求通过 Service Worker 实现 'Stale-While-Revalidate' 缓存策略，提供离线访问和快速响应。同时，`sessionStorage` 用于缓存用户界面相关的状态（如当前筛选器），以优化用户体验。
 
 ## 后端 API (Vercel Serverless Functions)
 
@@ -72,8 +76,8 @@ Briefing Hub 是一个基于 React 和 TypeScript 构建的应用程序，使用
 - **`api/get-available-dates.ts`**: 获取有文章的可用日期列表。
 - **`api/get-briefings.ts`**: 获取每日简报数据。
 - **`api/list-categories-tags.ts`**: 列出所有可用的分类和标签。
-- **`api/starred.ts`**: 处理星标文章的逻辑。
-- **`api/update-state.ts`**: 通用的文章状态更新接口。
+- **`api/starred.ts`**: 处理星标文章的逻辑，包括在“我的收藏”全文视图中收藏/取消收藏文章。
+- **`api/update-state.ts`**: 通用的文章状态更新接口，现在也用于在“我的收藏”全文视图中更新文章的已读状态和标签。
 - **模块导入**: 在 Vercel Serverless Functions 中，模块导入路径已修正为包含 `.js` 扩展名（例如 `import ... from './_utils.js';`），以确保在 Node.js 运行时环境中正确解析。
 
 ## 关键数据流
@@ -92,7 +96,8 @@ Briefing Hub 的数据流设计旨在实现清晰的职责分离和高效的状�
     - **文章状态管理**: 用户在 `ArticleCard.tsx` 或 `ArticleDetail.tsx` 中进行“已读/未读”、“收藏/取消收藏”等操作时，会调用 `useArticleManagement` Hook 中暴露的函数（如 `markArticleAsRead`, `toggleStarred`）。
     - 这些函数会通过 `services/api.ts` 调用相应的后端 API (例如 `api/update-state.ts` 或 `api/starred.ts`) 来更新数据库中的文章状态。
     - API 请求成功后，`useArticleManagement` 会更新本地状态，并可能触发相关 UI 组件的重新渲染。
-    - **阅读器视图**: 当用户点击文章进入阅读器视图时，`useReader` Hook 会管理阅读器模态框的显示状态，并调用 `services/api.ts` 中的 `getCleanArticleContent` 函数来获取文章的纯净内容。该函数利用缓存机制优化性能。
+    - **阅读器视图 (Reader View)**: 当用户在简报或文章列表中点击一篇文章时，`useReader` Hook 会管理一个模态框，并调用 `services/api.ts` 中的 `getCleanArticleContent` 函数来获取并展示文章的纯净内容。
+    - **全文视图 (Article Detail)**: 当用户在侧边栏的“我的收藏”列表中点击一篇文章时，`App.tsx` 会设置 `sidebarArticle` 状态，从而在主内容区直接渲染 `ArticleDetail` 组件，展示文章的完整详情。此时，文章详情页会显示“收藏”、“标记已读”和“标签”等操作按钮，用户可以直接进行文章状态管理。
 
 3.  **API 服务层 (`services/api.ts`)**:
     - 作为前端与后端之间的桥梁，统一处理所有 API 请求的发送、响应解析和错误处理。

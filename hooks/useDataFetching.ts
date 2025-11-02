@@ -7,15 +7,6 @@ interface UseDataFetchingProps {
     isInitialLoad: boolean;
 }
 
-export const getCacheKey = (filter: Filter, timeSlot: 'morning' | 'afternoon' | 'evening' | null) => {
-    if (!filter) return null;
-    let key = `articleCache-${filter.type}-${filter.value}`;
-    if (filter.type === 'date' && timeSlot) {
-        key += `-${timeSlot}`;
-    }
-    return key;
-};
-
 export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetchingProps) => {
     const [reports, setReports] = useState<BriefingReport[]>([]);
     const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
@@ -23,31 +14,11 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
     const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
     const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
 
-    const fetchData = useCallback(async (filter: Filter, slotOverride?: 'morning' | 'afternoon' | 'evening' | null, forceRefresh: boolean = false) => {
+    const fetchData = useCallback(async (filter: Filter, slotOverride?: 'morning' | 'afternoon' | 'evening' | null) => {
         if (!filter) return;
         setIsLoading(true);
 
-        const cacheKey = getCacheKey(filter, slotOverride || timeSlot);
-        if (!forceRefresh && cacheKey) {
-            try {
-                const cachedData = sessionStorage.getItem(cacheKey);
-                if (cachedData) {
-                    const parsedData = JSON.parse(cachedData);
-                    if (filter.type === 'date') {
-                        setReports(parsedData.reports);
-                        setSelectedReportId(parsedData.selectedReportId);
-                    } else if (filter.type === 'category' || filter.type === 'tag') {
-                        setFilteredArticles(parsedData.articles);
-                    }
-                    setIsLoading(false);
-                    console.log(`useDataFetching: Loaded data from cache for ${cacheKey}`);
-                    return;
-                }
-            } catch (error) {
-                console.error(`Failed to load data from cache for ${cacheKey}`, error);
-                sessionStorage.removeItem(cacheKey);
-            }
-        }
+        // All sessionStorage logic is removed. The service worker will handle caching.
 
         if (filter.type === 'date') {
             setFilteredArticles([]);
@@ -58,12 +29,9 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
                 const allArticles = fetchedReports.flatMap(report => Object.values(report.articles).flat());
                 const articleIds = allArticles.map(article => article.id);
 
-                let reportsToCache = fetchedReports;
-                let selectedReportIdToCache: number | null = null;
-
                 if (articleIds.length > 0) {
                     const states = await getArticleStates(articleIds);
-                    reportsToCache = fetchedReports.map(report => ({
+                    const reportsWithStates = fetchedReports.map(report => ({
                         ...report,
                         articles: Object.entries(report.articles).reduce((acc, [importance, articles]) => {
                             acc[importance] = articles.map(article => ({
@@ -73,23 +41,16 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
                             return acc;
                         }, {} as GroupedArticles)
                     }));
-                    setReports(reportsToCache);
+                    setReports(reportsWithStates);
+                    if (isInitialLoad && reportsWithStates.length > 0) {
+                        setSelectedReportId(reportsWithStates[0].id);
+                    }
                 } else {
                     setReports(fetchedReports);
+                    if (isInitialLoad && fetchedReports.length > 0) {
+                        setSelectedReportId(fetchedReports[0].id);
+                    }
                 }
-
-                if (reportsToCache.length > 0) {
-                    selectedReportIdToCache = reportsToCache[0].id;
-                    setSelectedReportId(selectedReportIdToCache);
-                } else {
-                    setSelectedReportId(null);
-                }
-
-                if (cacheKey) {
-                    sessionStorage.setItem(cacheKey, JSON.stringify({ reports: reportsToCache, selectedReportId: selectedReportIdToCache }));
-                    console.log(`useDataFetching: Cached data for ${cacheKey}`);
-                }
-
             } catch (error) {
                 console.error(`Failed to fetch data for date filter`, error);
                 setReports([]);
@@ -104,24 +65,16 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
                 const articles = await getArticlesByLabel(filter);
                 const articleIds = articles.map(article => article.id);
 
-                let articlesToCache = articles;
-
                 if (articleIds.length > 0) {
                     const states = await getArticleStates(articleIds);
-                    articlesToCache = articles.map(article => ({
+                    const articlesWithStates = articles.map(article => ({
                         ...article,
                         tags: states[String(article.id)] || []
                     }));
-                    setFilteredArticles(articlesToCache);
+                    setFilteredArticles(articlesWithStates);
                 } else {
                     setFilteredArticles([]);
                 }
-
-                if (cacheKey) {
-                    sessionStorage.setItem(cacheKey, JSON.stringify({ articles: articlesToCache }));
-                    console.log(`useDataFetching: Cached data for ${cacheKey}`);
-                }
-
             } catch (error) {
                 console.error(`Failed to fetch data for ${filter.type} filter`, error);
                 setFilteredArticles([]);
@@ -134,13 +87,16 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
             setSelectedReportId(null);
             setIsLoading(false);
         }
-    }, [timeSlot]); // Added timeSlot to dependencies
+    }, []);
 
     useEffect(() => {
-        if (!isInitialLoad && activeFilter) {
-            if (activeFilter.type === 'date') {
-                const today = getTodayInShanghai();
-                if (today && activeFilter.value === today) {
+        if (isInitialLoad || !activeFilter) return;
+    
+        const fetchDataForDate = (isToday: boolean) => {
+            if (isToday) {
+                if (timeSlot) {
+                    fetchData(activeFilter, timeSlot);
+                } else {
                     const shanghaiHour = new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Shanghai' })
                         .formatToParts(new Date())
                         .find(p => p.type === 'hour')?.value;
@@ -151,14 +107,18 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
                     else autoSlot = 'evening';
                     setTimeSlot(autoSlot);
                     fetchData(activeFilter, autoSlot);
-                } else {
-                    setTimeSlot(null);
-                    fetchData(activeFilter, null);
                 }
             } else {
                 setTimeSlot(null);
-                fetchData(activeFilter);
+                fetchData(activeFilter, null);
             }
+        };
+
+        if (activeFilter.type === 'date') {
+            const today = getTodayInShanghai();
+            fetchDataForDate(today ? activeFilter.value === today : false);
+        } else {
+            fetchData(activeFilter);
         }
     }, [activeFilter, isInitialLoad, fetchData]);
 

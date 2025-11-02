@@ -13,7 +13,7 @@ interface SidebarProps {
     onFilterChange: (filter: Filter) => void;
     onOpenArticle?: (article: Article) => void;
     onRefresh?: () => Promise<void>;
-}
+    datesForMonth: string[]; // Re-adding this prop
 
 const formatMonthForDisplay = (month: string) => {
     if (!month) return '';
@@ -22,7 +22,7 @@ const formatMonthForDisplay = (month: string) => {
     return date.toLocaleString('zh-CN', { year: 'numeric', month: 'long' });
 };
 
-const Sidebar: React.FC<SidebarProps> = ({
+const Sidebar = React.memo<SidebarProps>(({
     dates,
     isLoading,
     availableMonths,
@@ -33,7 +33,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     onFilterChange,
     onOpenArticle,
     onRefresh,
-    datesForMonth, // Add datesForMonth here
 }) => {
     const {
         activeTab,
@@ -120,14 +119,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <h2 className="text-base font-semibold text-gray-800 my-3">分类</h2>
                 <nav className="flex flex-col gap-1.5">
                     {availableFilters.categories
-                        .filter(category => category !== '未分类')
+                        .filter(category => category.label !== '未分类')
                         .map(category => (
                         <button
-                            key={category}
-                            onClick={() => onFilterChange({ type: 'category', value: category })}
-                            className={listItemButtonClass(isFilterActive('category', category))}
+                            key={category.id}
+                            onClick={() => onFilterChange({ type: 'category', value: category.id })}
+                            className={listItemButtonClass(isFilterActive('category', category.id))}
                         >
-                            <span>{category}</span>
+                            <span>{category.label}</span>
                         </button>
                     ))}
                 </nav>
@@ -137,11 +136,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex flex-wrap gap-2">
                      {availableFilters.tags.map(tag => (
                         <button
-                            key={tag}
-                             onClick={() => onFilterChange({ type: 'tag', value: tag })}
-                            className={chipButtonClass(isFilterActive('tag', tag))}
+                            key={tag.id}
+                             onClick={() => onFilterChange({ type: 'tag', value: tag.id })}
+                            className={chipButtonClass(isFilterActive('tag', tag.id))}
                         >
-                            #{tag}
+                            #{tag.label}
                         </button>
                     ))}
                 </div>
@@ -235,6 +234,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
         </aside>
       );
-};
+});
 
-export default Sidebar;
+export default React.memo(Sidebar);
