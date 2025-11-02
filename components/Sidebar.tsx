@@ -3,7 +3,6 @@ import { Article, Filter, AvailableFilters } from '../types';
 import { useSidebar, ActiveTab } from '../hooks/useSidebar'; // Import the new hook
 
 interface SidebarProps {
-    dates: string[];
     isLoading: boolean;
     availableMonths: string[];
     selectedMonth: string;
@@ -14,6 +13,7 @@ interface SidebarProps {
     onOpenArticle?: (article: Article) => void;
     onRefresh?: () => Promise<void>;
     datesForMonth: string[]; // Re-adding this prop
+}
 
 const formatMonthForDisplay = (month: string) => {
     if (!month) return '';
@@ -23,7 +23,6 @@ const formatMonthForDisplay = (month: string) => {
 };
 
 const Sidebar = React.memo<SidebarProps>(({
-    dates,
     isLoading,
     availableMonths,
     selectedMonth,
@@ -33,6 +32,7 @@ const Sidebar = React.memo<SidebarProps>(({
     onFilterChange,
     onOpenArticle,
     onRefresh,
+    datesForMonth,
 }) => {
     const {
         activeTab,
@@ -103,7 +103,7 @@ const Sidebar = React.memo<SidebarProps>(({
                                         <button
                                             key={article.id}
                                             onClick={() => onOpenArticle ? onOpenArticle(article) : onFilterChange({ type: 'starred', value: 'true' })}
-                                            className="w-full text-left text-sm text-gray-700 hover:bg-gray-100 px-2 py-1 rounded"
+                                            className={listItemButtonClass(isFilterActive('starredArticle', article.id.toString()))}
                                         >
                                             {article.title}
                                         </button>

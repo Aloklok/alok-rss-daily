@@ -254,8 +254,8 @@ const App: React.FC = () => {
                 `}
             >
                 <Sidebar 
-                    dates={datesForMonth} // Pass datesForMonth here
-                    isLoading={isLoading}
+                    datesForMonth={datesForMonth} // Pass datesForMonth here
+                    isLoading={isInitialLoad}
                     availableMonths={availableMonths}
                     selectedMonth={selectedMonth}
                     onMonthChange={setSelectedMonth}
@@ -270,7 +270,7 @@ const App: React.FC = () => {
                     }}
                     onOpenArticle={(article) => {
                         handleShowArticleInMain(article);
-                        clearActiveFilterAndCache(); // Clear active filter when opening an article
+                        handleFilterChange({ type: 'starredArticle', value: article.id.toString() });
                         if (!isMdUp) setIsSidebarCollapsed(true); // Auto-close on mobile
                     }}
                     onRefresh={combinedRefresh}

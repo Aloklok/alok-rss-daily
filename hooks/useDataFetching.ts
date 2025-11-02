@@ -81,10 +81,13 @@ export const useDataFetching = ({ activeFilter, isInitialLoad }: UseDataFetching
             } finally {
                 setIsLoading(false);
             }
-        } else if (filter.type === 'starred') {
+        } else if (filter.type === 'starred' || filter.type === 'starredArticle') {
             setReports([]);
             setFilteredArticles([]);
             setSelectedReportId(null);
+            setIsLoading(false);
+        } else {
+            // Ensure loading is always stopped for any other filter type or null filter
             setIsLoading(false);
         }
     }, []);

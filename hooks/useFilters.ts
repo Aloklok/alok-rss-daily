@@ -14,38 +14,27 @@ export const useFilters = () => {
     const [isInitialLoad, setIsInitialLoad] = useState(true);
 
     useEffect(() => {
-        const loadUiStateFromCache = () => {
-            try {
-                const cachedActiveFilter = sessionStorage.getItem(CACHE_KEY_ACTIVE_FILTER);
-                const cachedSelectedMonth = sessionStorage.getItem(CACHE_KEY_SELECTED_MONTH);
-
-                if (cachedActiveFilter && cachedSelectedMonth) {
-                    setActiveFilter(JSON.parse(cachedActiveFilter));
-                    setSelectedMonth(JSON.parse(cachedSelectedMonth));
-                    console.log('useFilters: Loaded UI state from cache.');
-                    return true;
-                }
-            } catch (error) {
-                console.error('Failed to load UI state from cache', error);
-                sessionStorage.removeItem(CACHE_KEY_ACTIVE_FILTER);
-                sessionStorage.removeItem(CACHE_KEY_SELECTED_MONTH);
-            }
-            return false;
-        };
-
         const fetchInitialFilterData = async () => {
-            // Load UI state from cache, but always fetch fresh data.
-            // The service worker will return cached data instantly if available.
-            if (!loadUiStateFromCache()) {
-                // If no UI state in cache, set to today's date by default
-                const today = getTodayInShanghai();
-                if (today) {
-                    const initialFilter = { type: 'date' as const, value: today };
-                    setActiveFilter(initialFilter);
+            // Always default to today's date on initial load for a fresh start.
+            const today = getTodayInShanghai();
+            if (today) {
+                const initialFilter = { type: 'date' as const, value: today };
+                setActiveFilter(initialFilter);
+                sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(initialFilter));
+
+                // Try to load the last selected month for calendar view consistency.
+                try {
+                    const cachedSelectedMonth = sessionStorage.getItem(CACHE_KEY_SELECTED_MONTH);
+                    if (cachedSelectedMonth) {
+                        setSelectedMonth(JSON.parse(cachedSelectedMonth));
+                    } else {
+                        setSelectedMonth(today.substring(0, 7));
+                        sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(today.substring(0, 7)));
+                    }
+                } catch (error) {
+                    // If cache fails, default to current month
                     setSelectedMonth(today.substring(0, 7));
-                    sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(initialFilter));
                     sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(today.substring(0, 7)));
-                    console.log('fetchInitialFilterData: Initial UI state set to today', today);
                 }
             }
 
@@ -119,9 +108,9 @@ export const useFilters = () => {
         if (!today) return;
         const resetFilter = { type: 'date' as const, value: today };
         setActiveFilter(resetFilter);
-        setSelectedMonth(today.substring(0, 0));
+        setSelectedMonth(today.substring(0, 7));
         sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(resetFilter));
-        sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(today.substring(0, 0)));
+        sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(today.substring(0, 7)));
         console.log('handleResetFilter: activeFilter and selectedMonth reset to today', today);
     };
 
