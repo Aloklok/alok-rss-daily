@@ -76,9 +76,23 @@ interface TagPopoverProps {
 }
 
 const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose, onStateChange }) => {
+    // Only filter out state tags, let the backend handle the categories vs tags separation
+    // The backend should have properly separated categories and tags already
+    const filteredTags = useMemo(() => {
+        return availableTags.filter(tag => {
+            // Only filter out state tags (read, starred, etc.) which shouldn't be user-selectable as regular tags
+            return !tag.id.includes('/state/com.google/') && !tag.id.includes('/state/org.freshrss/');
+        });
+    }, [availableTags]);
+
     const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set(article.tags?.filter(t => !t.startsWith('user/-/state')).map(t => t.replace(/\/\d+\//, '/-/')) || []));
     const [isSaving, setIsSaving] = useState(false);
     const popoverRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        // Update selected tags when article tags change, to keep them in sync
+        setSelectedTags(new Set(article.tags?.filter(t => !t.startsWith('user/-/state')).map(t => t.replace(/\/\d+\//, '/-/')) || []));
+    }, [article.tags]);
 
     const handleTagChange = (tagId: string) => {
         setSelectedTags(prev => {
@@ -106,12 +120,12 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose
     return (
         <div ref={popoverRef} className="absolute bottom-full mb-2 w-64 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 right-0 md:left-1/2 md:-translate-x-1/2" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b"><h4 className="font-semibold text-gray-800">编辑标签</h4></div>
-            {availableTags.length === 0 ? (
+            {filteredTags.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">暂无可用标签。</div>
             ) : (
                 <div className="p-4 max-h-60 overflow-y-auto">
                     <div className="space-y-3">
-                        {availableTags.map(tag => (
+                        {filteredTags.map(tag => (
                             <label key={tag.id} className="flex items-center space-x-3 cursor-pointer">
                                 <input type="checkbox" checked={selectedTags.has(tag.id)} onChange={() => handleTagChange(tag.id)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                 <span className="text-gray-700">{tag.label}</span>

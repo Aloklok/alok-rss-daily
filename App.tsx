@@ -66,9 +66,23 @@ interface TagPopoverProps {
 }
 
 const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose, onStateChange }) => {
+    // Only filter out state tags, let the backend handle the categories vs tags separation
+    // The backend should have properly separated categories and tags already
+    const filteredTags = useMemo(() => {
+        return availableTags.filter(tag => {
+            // Only filter out state tags (read, starred, etc.) which shouldn't be user-selectable as regular tags
+            return !tag.id.includes('/state/com.google/') && !tag.id.includes('/state/org.freshrss/');
+        });
+    }, [availableTags]);
+
     const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set(article.tags?.filter(t => !t.startsWith('user/-/state')).map(t => t.replace(/\/\d+\//, '/-/')) || []));
     const [isSaving, setIsSaving] = useState(false);
-    const popoverRef = useRef<HTMLDivElement>(null);
+    const popoverRef = useRef<HTMLHTMLDivElement>(null);
+
+    useEffect(() => {
+        // Update selected tags when article tags change, to keep them in sync
+        setSelectedTags(new Set(article.tags?.filter(t => !t.startsWith('user/-/state')).map(t => t.replace(/\/\d+\//, '/-/')) || []));
+    }, [article.tags]);
 
     const handleTagChange = (tagId: string) => {
         setSelectedTags(prev => {
@@ -94,14 +108,14 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, availableTags, onClose
     };
 
     return (
-        <div ref={popoverRef} className="absolute bottom-full mb-2 w-64 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 right-0 md:left-1/2 md:-translate-x-1/2" onClick={(e) => e.stopPropagation()}>
+        <div ref={popoverRef} className="absolute bottom-full mb-2 w-64 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 right-0" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b"><h4 className="font-semibold text-gray-800">编辑标签</h4></div>
-            {availableTags.length === 0 ? (
+            {filteredTags.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">暂无可用标签。</div>
             ) : (
                 <div className="p-4 max-h-60 overflow-y-auto">
                     <div className="space-y-3">
-                        {availableTags.map(tag => (
+                        {filteredTags.map(tag => (
                             <label key={tag.id} className="flex items-center space-x-3 cursor-pointer">
                                 <input type="checkbox" checked={selectedTags.has(tag.id)} onChange={() => handleTagChange(tag.id)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                 <span className="text-gray-700">{tag.label}</span>
@@ -123,6 +137,7 @@ const App: React.FC = () => {
     const [isMdUp, setIsMdUp] = useState<boolean>(false);
     const [availableTags, setAvailableTags] = useState<Tag[]>([]);
     const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' | 'info' }>({ isVisible: false, message: '', type: 'info' });
+    const [isMarkingSuccess, setIsMarkingSuccess] = useState(false);
 
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setToast({ isVisible: true, message, type });
@@ -200,6 +215,7 @@ const App: React.FC = () => {
 
     // Fetch available tags for TagPopover
     useEffect(() => {
+        console.log('App.tsx: availableFilters.tags before mapping:', availableFilters.tags);
         setAvailableTags(availableFilters.tags.map(tag => ({ id: tag.id, label: tag.label })));
     }, [availableFilters.tags]);
 
@@ -280,13 +296,12 @@ const App: React.FC = () => {
             {/* Control Buttons */}
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className={`fixed p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 ${isReaderVisible ? 'hidden' : ''} ${activeFilter?.type === 'date' && !isMdUp ? 'hidden' : ''}`}
-                style={{
-                    top: '20px',
-                    left: isMdUp ? (isSidebarCollapsed ? '20px' : '304px') : '20px',
-                    transition: 'left 0.3s ease-in-out',
-                    zIndex: 50
-                }}
+                className={`fixed top-5 p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 z-50
+                    ${isReaderVisible ? 'hidden' : ''} 
+                    ${activeFilter?.type === 'date' && !isMdUp ? 'hidden' : ''}
+                    md:left-5 md:transition-all md:duration-300 ${isSidebarCollapsed ? 'md:left-5' : 'md:left-[304px]'}
+                    right-5 md:right-auto 
+                `}
             >
                 {isSidebarCollapsed ? (
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-800" fill="none" viewBox="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -301,7 +316,9 @@ const App: React.FC = () => {
                 {isLoading ? (
                     <LoadingSpinner />
                 ) : sidebarArticle ? (
-                    <ArticleDetail article={sidebarArticle} onClose={handleCloseArticleDetail} />
+                    <div className="relative">
+                        <ArticleDetail article={sidebarArticle} onClose={handleCloseArticleDetail} />
+                    </div>
                 ) : activeFilter?.type === 'date' ? (
                     <Briefing 
                         reports={reports} 
@@ -336,33 +353,6 @@ const App: React.FC = () => {
                 
                 {/* Floating Action Buttons */}
                 <div className="fixed bottom-8 right-8 z-20 flex flex-col-reverse items-center gap-y-3">
-                    <button 
-                        onClick={async () => {
-                            let markedCount = 0;
-                            if (sidebarArticle) {
-                                markedCount = await handleMarkAllAsRead('singleArticle', [sidebarArticle.id]);
-                            } else {
-                                markedCount = await handleMarkAllAsRead(activeFilter?.type || 'date');
-                            }
-                            if (markedCount > 0) {
-                                showToast(`已将 ${markedCount} 篇文章设为已读`, 'success');
-                            } else {
-                                showToast('没有新的文章需要标记为已读。', 'info');
-                            }
-                        }} 
-                        disabled={isMarkingAsRead} 
-                        className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all disabled:bg-gray-500" 
-                        aria-label="Mark all as read"
-                    >
-                        {isMarkingAsRead ? (
-                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        ) : (
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        )}
-                    </button>
-                    <button onClick={handleScrollToTop} className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all" aria-label="Back to top">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-                    </button>
                     {sidebarArticle && (
                         <div className="relative" onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className="p-3 bg-sky-600 text-white rounded-full shadow-lg hover:bg-sky-700 transition-all" aria-label="Tag article">
@@ -378,6 +368,35 @@ const App: React.FC = () => {
                             )}
                         </div>
                     )}
+                    <button 
+                        onClick={async () => {
+                            let markedCount = 0;
+                            if (sidebarArticle) {
+                                markedCount = await handleMarkAllAsRead('singleArticle', [sidebarArticle.id]);
+                            } else {
+                                markedCount = await handleMarkAllAsRead(activeFilter?.type || 'date');
+                            }
+                            if (markedCount > 0) {
+                                showToast(`已将 ${markedCount} 篇文章设为已读`, 'success');
+                                setIsMarkingSuccess(true);
+                                setTimeout(() => setIsMarkingSuccess(false), 2000); // Revert after 2s
+                            } else {
+                                showToast('没有新的文章需要标记为已读。', 'info');
+                            }
+                        }} 
+                        disabled={isMarkingAsRead} 
+                        className={`p-3 text-white rounded-full shadow-lg transition-all disabled:bg-gray-500 ${isMarkingSuccess ? 'bg-green-500' : 'bg-gray-800 hover:bg-gray-950'}`} 
+                        aria-label="Mark all as read"
+                    >
+                        {isMarkingAsRead ? (
+                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        ) : (
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        )}
+                    </button>
+                    <button onClick={handleScrollToTop} className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all" aria-label="Back to top">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                    </button>
                 </div> {/* Closing tag for Floating Action Buttons */}
 
                 <ReaderView 

@@ -10,6 +10,8 @@ async function listCategoriesAndTags(req: VercelRequest, res: VercelResponse) {
     const freshRss = getFreshRssClient();
     const data = await freshRss.get<{ tags: FreshRssTag[] }>('/tag/list', { output: 'json' });
 
+    console.log('Raw FreshRSS /tag/list data:', JSON.stringify(data.tags, null, 2));
+
     const categories: { id: string; label: string }[] = [];
     const tags: { id: string; label: string }[] = [];
 

@@ -43,6 +43,8 @@ export const useArticleManagement = ({
                 filteredArticles.find(a => a.id === articleId);
 
             const originalTags: string[] = originalArticle?.tags || [];
+            console.log('handleArticleStateChange: originalTags', originalTags);
+            console.log('handleArticleStateChange: newTags (from TagPopover)', newTags);
             
             const isNowStarred = newTags.includes('user/-/state/com.google/starred');
             const wasStarred = originalTags.includes('user/-/state/com.google/starred');
@@ -59,8 +61,12 @@ export const useArticleManagement = ({
             const normalize = (tag: string) => tag.replace(/\/\d+\//, '/-/');
             const originalUserTags = new Set(originalTags.filter(t => !t.startsWith('user/-/state')).map(normalize));
             const newUserTags = new Set(newTags.filter(t => !t.startsWith('user/-/state')));
+            console.log('handleArticleStateChange: originalUserTags (normalized)', originalUserTags);
+            console.log('handleArticleStateChange: newUserTags (filtered)', newUserTags);
             const tagsToAdd = [...newUserTags].filter(t => !originalUserTags.has(t));
             const tagsToRemove = [...originalUserTags].filter(t => !newUserTags.has(t));
+            console.log('handleArticleStateChange: tagsToAdd', tagsToAdd);
+            console.log('handleArticleStateChange: tagsToRemove', tagsToRemove);
             if (tagsToAdd.length > 0 || tagsToRemove.length > 0) {
                 await editArticleTag(articleId, tagsToAdd, tagsToRemove);
             }

@@ -197,7 +197,7 @@ export const getAvailableFilters = (): Promise<AvailableFilters> => {
 export const getTags = async (): Promise<Tag[]> => {
     try {
         const filters = await getAvailableFilters();
-        return filters.tags.map(tag => ({ id: `user/-/label/${tag}`, label: tag }));
+        return filters.tags;
     } catch (error) {
         console.error('Failed to fetch tags', error);
         return [];
