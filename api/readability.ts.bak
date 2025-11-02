@@ -106,25 +106,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
             }
 
-                    const renderedDoc = new JSDOM(renderedHtml, { url: String(url) });
-                    const renderedReader = new Readability(renderedDoc.window.document);
-                    const renderedArticle = renderedReader.parse();
-                    if (renderedArticle && renderedArticle.content && (renderedArticle.content || '').trim().length > 100) {
-                        console.log('Headless Readability succeeded for URL:', url);
-                        return res.status(200).json({
-                            title: renderedArticle.title,
-                            content: renderedArticle.content,
-                            source: renderedArticle.siteName || new URL(String(url)).hostname,
-                        });
-                    }
-
-                    console.log('Headless render did not yield useful content for URL:', url);
-                }
-            } catch (err) {
-                console.error('Headless render attempt failed or puppeteer/chromium not available:', err);
-                // continue to remaining fallbacks
-            }
-        }
 
         // Fallback 1: look for semantic container like <article> or <main> or common selectors
         const docEl = doc.window.document;
