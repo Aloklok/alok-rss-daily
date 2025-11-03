@@ -1,51 +1,66 @@
+// components/ArticleDetail.tsx
+
 import React, { useEffect, useState } from 'react';
-import { Article, CleanArticleContent } from '../types';
+import { Article, CleanArticleContent, Tag } from '../types'; // 导入 Tag
 import { getCleanArticleContent } from '../services/api';
 
 interface ArticleDetailProps {
   article: Article;
   onClose?: () => void;
+  availableUserTags: Tag[]; // 【新增】接收 props
 }
+
+// 【新增】辅助函数，用于从 article.tags 中解析出用户标签的文本
+const getUserTagLabels = (tags: (string[] | undefined), availableUserTags: Tag[]): string[] => {
+    if (!tags || !availableUserTags) return [];
+    
+    const availableUserTagMap = new Map(availableUserTags.map(t => [t.id, t.label]));
+    
+    return tags
+        .filter(tagId => availableUserTagMap.has(tagId))
+        .map(tagId => availableUserTagMap.get(tagId))
+        .filter(Boolean) as string[];
+};
+
+// 【新增】辅助函数，用于给标签随机上色
+const tagColorClasses = [ 'bg-sky-100 text-sky-800', 'bg-emerald-100 text-emerald-800', 'bg-violet-100 text-violet-800', 'bg-rose-100 text-rose-800', 'bg-amber-100 text-amber-800', 'bg-cyan-100 text-cyan-800' ];
+const getRandomColorClass = (key: string) => { let hash = 0; for (let i = 0; i < key.length; i++) { hash = key.charCodeAt(i) + ((hash << 5) - hash); } const index = Math.abs(hash % tagColorClasses.length); return tagColorClasses[index]; };
+
 
 function stripLeadingTitle(contentHtml: string, title: string): string {
   if (!contentHtml || !title) return contentHtml;
   try {
-    // If content starts with an <h1> that contains the title, remove that node
-    const lower = contentHtml.toLowerCase();
-    const titleLower = title.toLowerCase().trim();
-
-    // Quick heuristic: if an <h1> appears before the first <p> and includes the title, strip it
     const h1Match = contentHtml.match(/^\s*<h1[^>]*>([\s\S]*?)<\/h1>/i);
     if (h1Match && h1Match[1]) {
       const h1Text = h1Match[1].replace(/<[^>]+>/g, '').toLowerCase().trim();
+      const titleLower = title.toLowerCase().trim();
       if (h1Text && (h1Text === titleLower || h1Text.includes(titleLower) || titleLower.includes(h1Text))) {
         return contentHtml.replace(h1Match[0], '');
       }
     }
-
-    // If content begins with the bare title as text, remove it
     const textStart = contentHtml.replace(/^\s+/, '');
-    if (textStart.toLowerCase().startsWith(titleLower)) {
+    if (textStart.toLowerCase().startsWith(title.toLowerCase().trim())) {
       return contentHtml.replace(new RegExp('^\\s*' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '');
     }
   } catch (e) {
-    // ignore and return original
     console.error('stripLeadingTitle error', e);
   }
   return contentHtml;
 }
 
-const ArticleDetail: React.FC<ArticleDetailProps> = ({ article, onClose }) => {
+const ArticleDetail: React.FC<ArticleDetailProps> = ({ article, onClose, availableUserTags }) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [content, setContent] = useState<CleanArticleContent | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const isSentinel = article.link === 'about:blank' || String(article.id).startsWith('empty-');
 
+  // 【新增】调用辅助函数获取标签文本
+  const userTagLabels = getUserTagLabels(article.tags, availableUserTags);
+
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      // If this is the sentinel empty article, skip any fetch and render blank.
       if (isSentinel) {
         if (!mounted) return;
         setIsLoading(false);
@@ -58,26 +73,21 @@ const ArticleDetail: React.FC<ArticleDetailProps> = ({ article, onClose }) => {
       setError(null);
       setContent(null);
       try {
-        // Use the article.link (mapped from FreshRSS) as the canonical URL to fetch readability content
         const url = article.link;
         const data = await getCleanArticleContent({ ...article, link: url });
         if (!mounted) return;
 
-        // If Readability returned empty or extremely short content, fall back to FreshRSS summary
         let contentHtml = (data && data.content) || '';
         const hasUsefulContent = contentHtml && contentHtml.trim().length > 40;
 
         if (!hasUsefulContent) {
-          // Prefer the FreshRSS-provided summary (if available) so the user still sees something
           if (article.summary && article.summary.trim().length > 0) {
             contentHtml = article.summary;
           } else {
-            // Last resort: provide a simple link to the original article
             contentHtml = `<p>无法从目标站点提取可读内容。您可以点击下面的链接查看原文：</p><p><a href="${article.link}" target="_blank" rel="noopener noreferrer">打开原文</a></p>`;
           }
         }
 
-        // Ensure title is used as heading and strip it from content if Readability included it
         const cleanedHtml = stripLeadingTitle(contentHtml, (data && data.title) || article.title || '');
         setContent({ title: (data && data.title) || article.title, source: (data && data.source) || article.sourceName, content: cleanedHtml });
       } catch (e: any) {
@@ -89,7 +99,7 @@ const ArticleDetail: React.FC<ArticleDetailProps> = ({ article, onClose }) => {
     };
     load();
     return () => { mounted = false; };
-  }, [article]);
+  }, [article, isSentinel]);
 
   return (
     <div className="p-2 md:p-8">
@@ -106,28 +116,22 @@ const ArticleDetail: React.FC<ArticleDetailProps> = ({ article, onClose }) => {
         </div>
       ) : content ? (
         <article>
-          <header className="mb-6">
+          <header className="mb-6 border-b pb-6">
             <h1 className="text-3xl md:text-4xl font-bold font-serif text-gray-900 mb-2">{content.title || article.title}</h1>
             <p className="text-sm text-gray-500">来源: {content.source || article.sourceName}</p>
+            
+            {/* 【核心修改】在这里渲染标签 */}
+            {userTagLabels.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                    {userTagLabels.map(label => (
+                        <span key={label} className={`text-sm font-semibold inline-block py-1 px-3 rounded-full ${getRandomColorClass(label)}`}>
+                            #{label}
+                        </span>
+                    ))}
+                </div>
+            )}
           </header>
-          <div className="prose prose-lg max-w-none text-gray-800 leading-relaxed" dangerouslySetInnerHTML={{ __html: content.content }} />
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                // Ensure images have width and height attributes to prevent CLS
-                document.addEventListener('DOMContentLoaded', function() {
-                  const images = document.querySelectorAll('.prose img');
-                  images.forEach(img => {
-                    if (!img.hasAttribute('width') && !img.hasAttribute('height')) {
-                      img.setAttribute('loading', 'lazy');
-                      img.style.width = '100%';
-                      img.style.height = 'auto';
-                    }
-                  });
-                });
-              `,
-            }}
-          />
+          <div className="prose prose-lg max-w-none text-gray-800 leading-relaxed mt-6" dangerouslySetInnerHTML={{ __html: content.content }} />
         </article>
       ) : (
         <div className="text-gray-500">无内容可显示</div>

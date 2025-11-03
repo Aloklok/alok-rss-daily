@@ -1,6 +1,6 @@
 // components/ArticleCard.tsx
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { Article, Tag } from '../types';
 import TagPopover from './TagPopover';
 
@@ -194,4 +194,4 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags, o
     );
 };
 
-export default ArticleCard;
+export default memo(ArticleCard);

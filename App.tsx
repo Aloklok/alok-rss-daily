@@ -92,21 +92,21 @@ const App: React.FC = () => {
     const { mutate: markAllAsRead, isPending: isMarkingAsRead } = useMarkAllAsRead();
 
     const handleArticleStateChange = (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => {
-        return updateArticleState({ articleId, tagsToAdd, tagsToRemove }, {
-            onSuccess: (data, variables, context) => {
-                const updatedArticle = context?.updatedArticle;
-                if (updatedArticle && sidebarArticle && sidebarArticle.id === updatedArticle.id) {
-                    handleShowArticleInMain(updatedArticle);
-                }
-            },
-            onError: (error, variables, context) => {
-                const originalArticle = context?.originalArticle;
-                if (originalArticle && sidebarArticle && sidebarArticle.id === originalArticle.id) {
-                    handleShowArticleInMain(originalArticle);
-                }
+    // 【核心修改】现在 mutateAsync 会在 API 成功后才 resolve
+    return updateArticleState({ articleId, tagsToAdd, tagsToRemove }, {
+        onSuccess: (updatedArticle) => {
+            // updatedArticle 是从 mutationFn 成功返回的数据
+            // 我们用它来更新局部的 sidebarArticle 状态
+            if (updatedArticle && sidebarArticle && sidebarArticle.id === updatedArticle.id) {
+                handleShowArticleInMain(updatedArticle);
             }
-        });
-    };
+        },
+        onError: (error) => {
+            // 可以在这里显示一个错误 Toast
+            showToast('标签更新失败', 'error');
+        }
+    });
+};
 
 const handleMarkAllClick = () => {
     let idsToMark: (string | number)[] = [];
@@ -140,9 +140,26 @@ const handleMarkAllClick = () => {
         showToast('没有文章需要标记', 'info');
     }
 };
-    const combinedRefresh = useCallback(async () => {
-        await refreshFilters();
-    }, [refreshFilters]);
+
+const onFilterChange = useCallback((filter: Filter) => {
+    handleFilterChange(filter);
+    handleCloseArticleDetail();
+    if (!isMdUp) setIsSidebarCollapsed(true);
+}, [handleFilterChange, handleCloseArticleDetail, isMdUp]);
+
+const onOpenArticle = useCallback((article: Article) => {
+    handleShowArticleInMain(article);
+    handleFilterChange({ type: 'starredArticle', value: article.id.toString() });
+    if (!isMdUp) setIsSidebarCollapsed(true);
+}, [handleShowArticleInMain, handleFilterChange, isMdUp]);
+
+const onMonthChange = useCallback((month: string) => {
+    setSelectedMonth(month);
+}, [setSelectedMonth]);
+
+const combinedRefresh = useCallback(async () => {
+    await refreshFilters();
+}, [refreshFilters]);
 
     useEffect(() => {
         const updateViewport = () => {
@@ -186,19 +203,11 @@ const handleMarkAllClick = () => {
                     isRefreshingFilters={isRefreshingFilters}
                     availableMonths={availableMonths}
                     selectedMonth={selectedMonth}
-                    onMonthChange={setSelectedMonth}
+                    onMonthChange={onMonthChange}
                     availableFilters={availableFilters}
                     activeFilter={activeFilter}
-                    onFilterChange={(filter) => {
-                        handleFilterChange(filter);
-                        handleCloseArticleDetail();
-                        if (!isMdUp) setIsSidebarCollapsed(true);
-                    }}
-                    onOpenArticle={(article) => {
-                        handleShowArticleInMain(article);
-                        handleFilterChange({ type: 'starredArticle', value: article.id.toString() });
-                        if (!isMdUp) setIsSidebarCollapsed(true);
-                    }}
+                    onFilterChange={onFilterChange}
+                    onOpenArticle={onOpenArticle}
                     onRefresh={combinedRefresh}
                     datesForMonth={datesForMonth}
                 />
@@ -224,7 +233,11 @@ const handleMarkAllClick = () => {
                 {isLoading ? (
                     <LoadingSpinner />
                 ) : sidebarArticle ? (
-                    <ArticleDetail article={sidebarArticle} onClose={handleCloseArticleDetail} />
+                   <ArticleDetail 
+                    article={sidebarArticle} 
+                    onClose={handleCloseArticleDetail}
+                    availableUserTags={availableFilters.tags} // 【新增】
+                  />
                 ) : activeFilter?.type === 'date' ? (
                     <Briefing 
                         reports={reports} 

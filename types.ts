@@ -16,6 +16,7 @@ export interface Verdict {
 export interface Tag {
   id: string;
   label: string;
+  count?: number; // 【新增】count 属性，设为可选
 }
 
 export interface Article {
@@ -55,8 +56,8 @@ export interface CleanArticleContent {
 }
 
 export interface AvailableFilters {
-    categories: { id: string; label: string }[];
-    tags: { id: string; label: string }[];
+    categories: Tag[]; // 【修改】使用 Tag 类型，它现在也包含 count
+    tags: Tag[];       // 【修改】使用 Tag 类型
 }
 export type Filter = {
   type: 'date' | 'category' | 'tag' | 'starred';

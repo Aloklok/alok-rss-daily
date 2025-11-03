@@ -32,6 +32,11 @@ export const useSidebar = () => {
             .filter(Boolean) as Article[];
     }, [starredArticleIds, articlesById]);
 
+
+     // 【核心修改】在这里新增一行
+    const starredCount = starredArticleIds.length;
+
+
     return {
         activeTab,
         setActiveTab,
@@ -40,5 +45,6 @@ export const useSidebar = () => {
         starredArticles,
         isLoadingStarred, // 这个状态现在能正确反映刷新动作了
         refreshStarred,
+        starredCount, // 返回收藏文章数量
     };
 };

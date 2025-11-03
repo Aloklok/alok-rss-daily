@@ -1,6 +1,6 @@
 // components/ArticleList.tsx
 
-import React from 'react';
+import React, { memo } from 'react';
 import { Article } from '../types';
 import { useArticleStore } from '../store/articleStore';
 
@@ -54,4 +54,4 @@ const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, is
   );
 };
 
-export default ArticleList;
+export default memo(ArticleList);

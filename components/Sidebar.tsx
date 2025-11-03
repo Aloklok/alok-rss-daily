@@ -1,6 +1,6 @@
 // components/Sidebar.tsx
 
-import React from 'react';
+import React, { memo,useState  } from 'react';
 import { Article, Filter, AvailableFilters } from '../types';
 import { useSidebar, ActiveTab } from '../hooks/useSidebar';
 
@@ -46,7 +46,11 @@ const Sidebar = React.memo<SidebarProps>(({
         starredArticles,
         isLoadingStarred, // 这个状态来自 useSidebar，包含了 isFetching
         refreshStarred,
+        starredCount,
     } = useSidebar();
+
+    // 1. 【核心修改】为“分类”添加折叠状态
+    const [categoriesExpanded, setCategoriesExpanded] = useState(false);
 
     // 【核心修复】组合所有加载状态
     const isLoading = isInitialLoading || isRefreshingFilters || isLoadingStarred;
@@ -67,56 +71,105 @@ const Sidebar = React.memo<SidebarProps>(({
     const listItemButtonClass = (isActive: boolean) => `w-full text-left px-3 py-2 rounded-lg transition-colors duration-200 flex items-center gap-3 text-gray-700 ${ isActive ? 'bg-gray-800 text-white font-semibold' : 'text-gray-600 hover:bg-gray-100' }`;
     const tabButtonClass = (isActive: boolean) => `text-sm font-semibold transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 rounded-md py-2 ${ isActive ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100' }`;
 
-    const renderFiltersTab = () => (
-        <div className="space-y-4">
-             <nav className="flex flex-col gap-1.5">
-                <div>
-                    <button onClick={toggleStarred} className={listItemButtonClass(isFilterActive('starred', 'true'))}>
-                        <span>⭐</span>
-                        <span className="flex-1">我的收藏</span>
-                        <svg className={`h-4 w-4 transition-transform ${starredExpanded ? 'rotate-90' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                    </button>
-                    {starredExpanded && (
-                        <div className="mt-2 ml-2 border-l pl-3 space-y-1">
-                            {isLoadingStarred && starredArticles.length === 0 ? (
-                                <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-8 bg-gray-200 rounded animate-pulse"></div>)}</div>
-                            ) : (
-                                starredArticles.length === 0 ? (
-                                    <div className="text-sm text-gray-500">暂无收藏</div>
-                                ) : (
-                                    starredArticles.map(article => (
-                                        <button key={article.id} onClick={() => onOpenArticle ? onOpenArticle(article) : onFilterChange({ type: 'starred', value: 'true' })} className={listItemButtonClass(isFilterActive('starredArticle', article.id.toString()))}>
-                                            {article.title}
-                                        </button>
-                                    ))
-                                )
-                            )}
-                        </div>
+
+
+// --- 将这一整段 renderFiltersTab 函数替换掉 ---
+const renderFiltersTab = () => (
+    <div className="space-y-1">
+        {/* 我的收藏 */}
+        <nav className="flex flex-col">
+            <button onClick={toggleStarred} className={listItemButtonClass(isFilterActive('starred', 'true'))}>
+                <span>⭐</span>
+                <span className="flex-1">我的收藏</span>
+                {starredCount > 0 && (
+                    // 1. 【修改】统一使用更柔和的指示器样式
+                    <span className="text-xs font-medium bg-gray-200 text-gray-600 rounded-full h-5 w-5 flex items-center justify-center">
+                        {starredCount}
+                    </span>
+                )}
+                <svg className={`h-4 w-4 transition-transform ${starredExpanded ? 'rotate-90' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
+            {starredExpanded && (
+                <div className="mt-2 ml-4 pl-3 border-l border-gray-200 space-y-1">
+                    {isLoadingStarred && starredArticles.length === 0 ? (
+                        <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-8 bg-gray-200 rounded animate-pulse"></div>)}</div>
+                    ) : (
+                        starredArticles.length === 0 ? (
+                            <div className="px-3 py-2 text-sm text-gray-500">暂无收藏</div>
+                        ) : (
+                            starredArticles.map(article => (
+                                <button key={article.id} onClick={() => onOpenArticle ? onOpenArticle(article) : onFilterChange({ type: 'starred', value: 'true' })} className={listItemButtonClass(isFilterActive('starredArticle', article.id.toString()))}>
+                                    <span className="truncate">{article.title}</span>
+                                </button>
+                            ))
+                        )
                     )}
                 </div>
-            </nav>
-            <div>
-                <h2 className="text-base font-semibold text-gray-800 my-3">分类</h2>
-                <nav className="flex flex-col gap-1.5">
-                    {availableFilters.categories.filter(category => category.label !== '未分类').map(category => (
-                        <button key={category.id} onClick={() => onFilterChange({ type: 'category', value: category.id })} className={listItemButtonClass(isFilterActive('category', category.id))}>
-                            <span>{category.label}</span>
-                        </button>
-                    ))}
-                </nav>
-            </div>
-             <div>
-                <h2 className="text-base font-semibold text-gray-800 my-3">标签</h2>
-                <div className="flex flex-wrap gap-2">
-                     {availableFilters.tags.map(tag => (
-                        <button key={tag.id} onClick={() => onFilterChange({ type: 'tag', value: tag.id })} className={chipButtonClass(isFilterActive('tag', tag.id))}>
-                            #{tag.label}
+            )}
+        </nav>
+
+        {/* 分类 */}
+        <nav className="flex flex-col">
+            {/* 2. 【修改】移除 font-semibold */}
+            <button onClick={() => setCategoriesExpanded(prev => !prev)} className={listItemButtonClass(false)}>
+                <span>📂</span>
+                <span className="flex-1">分类</span>
+                <svg className={`h-4 w-4 transition-transform ${categoriesExpanded ? 'rotate-90' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
+            {categoriesExpanded && (
+                <div className="mt-2 ml-4 pl-3 border-l border-gray-200 space-y-1">
+                    {availableFilters.categories
+                        .filter(category => category.label !== '未分类')
+                        .map(category => (
+                        <button
+                            key={category.id}
+                            onClick={() => onFilterChange({ type: 'category', value: category.id })}
+                            className={listItemButtonClass(isFilterActive('category', category.id))}
+                        >
+                            <span className="flex-1 truncate">{category.label}</span>
+                            {category.count !== undefined && category.count > 0 && (
+                                // 1. 【修改】统一使用更柔和的指示器样式
+                                <span className="text-xs font-medium bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">
+                                    {category.count}
+                                </span>
+                            )}
                         </button>
                     ))}
                 </div>
+            )}
+        </nav>
+
+         {/* 标签 */}
+         <div className="flex flex-col">
+            {/* 2. 【修改】移除 font-semibold */}
+            <div className="w-full text-left px-3 py-2 flex items-center gap-3 text-gray-600">
+                <span>🏷️</span>
+                <span className="flex-1">标签</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1 px-3">
+                 {availableFilters.tags.map(tag => (
+                    <button
+                        key={tag.id}
+                        onClick={() => onFilterChange({ type: 'tag', value: tag.id })}
+                        className={`w-full text-left px-2 py-1.5 rounded-md transition-colors duration-200 flex items-center justify-between text-sm ${
+                            isFilterActive('tag', tag.id) 
+                            ? 'bg-gray-800 text-white font-semibold' 
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                    >
+                        <span className="truncate">#{tag.label}</span>
+                        {tag.count !== undefined && tag.count > 0 && (
+                            // 1. 【修改】统一使用更柔和的指示器样式
+                            <span className={`text-xs font-medium rounded-full px-1.5 py-0.5 ${isFilterActive('tag', tag.id) ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                {tag.count}
+                            </span>
+                        )}
+                    </button>
+                ))}
             </div>
         </div>
-    );
+    </div>
+);
 
     const renderCalendarTab = () => (
         <div className="flex flex-col h-full">
@@ -172,11 +225,11 @@ const Sidebar = React.memo<SidebarProps>(({
                 </button>
             </div>
 
-            <div className="flex-grow overflow-y-auto">
+            <div className="flex-grow overflow-y-scroll">
                 {activeTab === 'filters' ? renderFiltersTab() : renderCalendarTab()}
             </div>
         </aside>
       );
 });
 
-export default React.memo(Sidebar);
+export default memo(Sidebar);
