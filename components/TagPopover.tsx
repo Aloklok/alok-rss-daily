@@ -5,24 +5,18 @@ import { Article, Tag } from '../types';
 
 interface TagPopoverProps {
     article: Article;
-    availableUserTags: Tag[]; // 【修改】只接收纯净的用户标签列表
+    availableUserTags: Tag[];
     onClose: () => void;
-    onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
+    // 【核心修改】让 onStateChange 返回 Promise<any> 或 Promise<void>
+    onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<any>;
 }
 
 const TagPopover: React.FC<TagPopoverProps> = ({ article, availableUserTags, onClose, onStateChange }) => {
-    // 1. 【核心修复】我们唯一的“事实来源”是 availableUserTags。创建一个 Set 用于高效查找。
-    const validUserTagIds = useMemo(() => 
-        new Set(availableUserTags.map(t => t.id))
-    , [availableUserTags]);
-
-    // 2. 【核心修复】通过比对“事实来源”，从文章的所有标签中过滤出真正的用户标签。
-    const originalUserTags = useMemo(() => new Set(
-        (article.tags || []).filter(tagOnArticle => validUserTagIds.has(tagOnArticle))
-    ), [article.tags, validUserTagIds]);
+    const validUserTagIds = useMemo(() => new Set(availableUserTags.map(t => t.id)), [availableUserTags]);
+    const originalUserTags = useMemo(() => new Set((article.tags || []).filter(tagOnArticle => validUserTagIds.has(tagOnArticle))), [article.tags, validUserTagIds]);
 
     const [selectedTags, setSelectedTags] = useState<Set<string>>(originalUserTags);
-    const [isSaving, setIsSaving] = useState(false);
+    const [isSaving, setIsSaving] = useState(false); // 我们将使用这个状态来控制按钮的 loading
     const popoverRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -39,17 +33,20 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, availableUserTags, onC
     };
 
     const handleConfirm = async () => {
-        setIsSaving(true);
+        setIsSaving(true); // 开始 loading
         const tagsToAdd = [...selectedTags].filter(t => !originalUserTags.has(t));
         const tagsToRemove = [...originalUserTags].filter(t => !selectedTags.has(t));
 
         try {
+            // 【核心修复】现在 await 会真正等待 API 调用完成（或失败）
             await onStateChange(article.id, tagsToAdd, tagsToRemove);
+            // 只有在 await 成功后，才关闭弹窗
             onClose();
         } catch (error) {
             console.error("Failed to save tags", error);
+            // 失败时，可以让弹窗保持打开，以便用户重试
         } finally {
-            setIsSaving(false);
+            setIsSaving(false); // 结束 loading
         }
     };
 
@@ -77,7 +74,10 @@ const TagPopover: React.FC<TagPopoverProps> = ({ article, availableUserTags, onC
             )}
             <div className="p-3 bg-gray-50 flex justify-end space-x-2 rounded-b-lg">
                 <button onClick={onClose} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
-                <button onClick={handleConfirm} disabled={isSaving} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:bg-blue-300">{isSaving ? '保存中...' : '确认'}</button>
+                {/* 【核心修复】按钮现在会根据 isSaving 状态显示 loading */}
+                <button onClick={handleConfirm} disabled={isSaving} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:bg-blue-300 w-20 text-center">
+                    {isSaving ? '保存中...' : '确认'}
+                </button>
             </div>
         </div>
     );

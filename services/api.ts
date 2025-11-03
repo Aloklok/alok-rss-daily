@@ -121,14 +121,18 @@ export const getArticlesDetails = (articleIds: (string | number)[]): Promise<Rec
     return apiService.request<Record<string, Article>>(`/api/get-briefings?${params.toString()}`);
 };
 
-export const markAllAsRead = (articleIds: (string | number)[]): Promise<void> => {
-    if (!articleIds || articleIds.length === 0) return Promise.resolve();
+export const markAllAsRead = (articleIds: (string | number)[]): Promise<(string|number)[]> => {
+    if (!articleIds || articleIds.length === 0) return Promise.resolve([]);
+    
     return apiService.request<void>('/api/update-state', {
         method: 'POST',
         body: { articleIds, action: 'read', isAdding: true },
+    }).then(() => {
+        // 【核心修改】成功后，在这里显示 Toast 并返回 articleIds
+        showToast(`已将 ${articleIds.length} 篇文章设为已读`, 'success');
+        return articleIds;
     });
 };
-
 // --- Article Content Cache ---
 const articleCache = new Map<string | number, CleanArticleContent>();
 
@@ -172,6 +176,7 @@ export const editArticleState = (articleId: string | number, action: 'star' | 'r
 };
 
 export const editArticleTag = async (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]): Promise<void> => {
+    // API 调用保持不变
     await apiService.request<void>('/api/update-state', {
         method: 'POST',
         body: {
@@ -181,6 +186,7 @@ export const editArticleTag = async (articleId: string | number, tagsToAdd: stri
         },
     });
 
+    // 【核心修改】成功后，在这里直接显示 Toast
     if (tagsToAdd.length > 0 || tagsToRemove.length > 0) {
         const extractLabel = (tag: string) => decodeURIComponent(tag.split('/').pop() || tag);
         const added = tagsToAdd.map(extractLabel).join(', ');

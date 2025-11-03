@@ -1,8 +1,9 @@
+// hooks/useFilters.ts
+
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Filter, AvailableFilters } from '../types';
 import { getAvailableDates, getAvailableFilters, getTodayInShanghai } from '../services/api';
 
-// Cache keys for UI state only
 const CACHE_KEY_ACTIVE_FILTER = 'cachedActiveFilter';
 const CACHE_KEY_SELECTED_MONTH = 'cachedSelectedMonth';
 
@@ -12,30 +13,19 @@ export const useFilters = () => {
     const [availableFilters, setAvailableFilters] = useState<AvailableFilters>({ categories: [], tags: [] });
     const [selectedMonth, setSelectedMonth] = useState<string>('');
     const [isInitialLoad, setIsInitialLoad] = useState(true);
+    
+    // 1. 【核心修改】新增 isRefreshing 状态
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     useEffect(() => {
         const fetchInitialFilterData = async () => {
-            // Always default to today's date on initial load for a fresh start.
             const today = getTodayInShanghai();
             if (today) {
                 const initialFilter = { type: 'date' as const, value: today };
                 setActiveFilter(initialFilter);
                 sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(initialFilter));
-
-                // Try to load the last selected month for calendar view consistency.
-                try {
-                    const cachedSelectedMonth = sessionStorage.getItem(CACHE_KEY_SELECTED_MONTH);
-                    if (cachedSelectedMonth) {
-                        setSelectedMonth(JSON.parse(cachedSelectedMonth));
-                    } else {
-                        setSelectedMonth(today.substring(0, 7));
-                        sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(today.substring(0, 7)));
-                    }
-                } catch (error) {
-                    // If cache fails, default to current month
-                    setSelectedMonth(today.substring(0, 7));
-                    sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(today.substring(0, 7)));
-                }
+                const cachedMonth = sessionStorage.getItem(CACHE_KEY_SELECTED_MONTH);
+                setSelectedMonth(cachedMonth ? JSON.parse(cachedMonth) : today.substring(0, 7));
             }
 
             try {
@@ -43,52 +33,43 @@ export const useFilters = () => {
                     getAvailableDates(),
                     getAvailableFilters()
                 ]);
-
-                const sortedDates = availableDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-                setDates(sortedDates);
+                setDates(availableDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime()));
                 setAvailableFilters(filters);
-                console.log('fetchInitialFilterData: Fresh filter data fetched and set.');
-
             } catch (error) {
                 console.error("Failed to fetch initial filter data", error);
             } finally {
                 setIsInitialLoad(false);
-                console.log('fetchInitialFilterData: Initial load finished');
             }
         };
         fetchInitialFilterData();
     }, []);
 
+    // 2. 【核心修改】重写 refreshFilters 函数
     const refreshFilters = useCallback(async () => {
-        // Clear only UI state cache. Service worker manages its own cache.
+        setIsRefreshing(true); // 开始刷新
         sessionStorage.removeItem(CACHE_KEY_ACTIVE_FILTER);
         sessionStorage.removeItem(CACHE_KEY_SELECTED_MONTH);
-        console.log('refreshFilters: UI state cache cleared.');
-
         try {
-            // Refetch data. The service worker will handle the request.
             const [availableDatesNew, filtersNew] = await Promise.all([
                 getAvailableDates(),
                 getAvailableFilters()
             ]);
-            const sortedDates = availableDatesNew.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-            setDates(sortedDates);
+            setDates(availableDatesNew.sort((a, b) => new Date(b).getTime() - new Date(a).getTime()));
             setAvailableFilters(filtersNew);
-            console.log('refreshFilters: Filter data refreshed');
         } catch (error) {
             console.error('Failed to refresh sidebar data', error);
+        } finally {
+            setIsRefreshing(false); // 结束刷新
         }
     }, []);
 
     const availableMonths = useMemo(() => {
-        if (dates.length === 0) return [];
         const monthSet = new Set<string>();
         dates.forEach(date => monthSet.add(date.substring(0, 7)));
         return Array.from(monthSet).sort((a, b) => b.localeCompare(a));
     }, [dates]);
 
     const datesForMonth = useMemo(() => {
-        if (!selectedMonth) return [];
         return dates.filter(date => date.startsWith(selectedMonth));
     }, [dates, selectedMonth]);
 
@@ -100,7 +81,6 @@ export const useFilters = () => {
             setSelectedMonth(newMonth);
             sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(newMonth));
         }
-        console.log('handleFilterChange: activeFilter updated to', filter);
     };
     
     const handleResetFilter = () => {
@@ -111,19 +91,11 @@ export const useFilters = () => {
         setSelectedMonth(today.substring(0, 7));
         sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(resetFilter));
         sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(today.substring(0, 7)));
-        console.log('handleResetFilter: activeFilter and selectedMonth reset to today', today);
     };
-
-    const clearActiveFilterAndCache = useCallback(() => {
-        setActiveFilter(null);
-        // Do NOT clear selectedMonth here. It should remain to show the calendar list.
-        sessionStorage.removeItem(CACHE_KEY_ACTIVE_FILTER);
-        sessionStorage.removeItem(CACHE_KEY_SELECTED_MONTH);
-        console.log('clearActiveFilterAndCache: activeFilter cleared, selectedMonth retained.');
-    }, []);
 
     return {
         isInitialLoad,
+        isRefreshing, // 3. 【核心修改】导出 isRefreshing 状态
         datesForMonth,
         activeFilter,
         availableFilters,
@@ -133,6 +105,5 @@ export const useFilters = () => {
         handleFilterChange,
         handleResetFilter,
         refreshFilters,
-        clearActiveFilterAndCache, // Expose the new function
     };
 };

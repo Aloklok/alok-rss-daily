@@ -7,6 +7,8 @@ import ReaderView from './components/ReaderView';
 import ArticleDetail from './components/ArticleDetail';
 import ArticleList from './components/ArticleList';
 import TagPopover from './components/TagPopover';
+import LoadingSpinner from './components/LoadingSpinner';
+import Toast from './components/Toast';
 import { Article, Tag, BriefingReport, GroupedArticles } from './types';
 import { useArticleStore } from './store/articleStore';
 
@@ -18,34 +20,6 @@ import {
     useUpdateArticleState,
     useMarkAllAsRead
 } from './hooks/useArticles';
-
-const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center h-full w-full">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
-    </div>
-);
-
-interface ToastProps {
-    message: string;
-    isVisible: boolean;
-    onClose: () => void;
-    type?: 'success' | 'error' | 'info';
-}
-
-const Toast: React.FC<ToastProps> = ({ message, isVisible, onClose, type = 'info' }) => {
-    if (!isVisible) return null;
-    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-gray-800';
-    const icon = type === 'success' ? ( <svg className="w-6 h-6 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> ) : type === 'error' ? ( <svg className="w-6 h-6 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> ) : ( <svg className="w-6 h-6 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> );
-    return (
-        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center p-4 rounded-lg shadow-lg text-white transition-all duration-300 transform ${bgColor}`} style={{ opacity: isVisible ? 1 : 0, transform: `translate(-50%, ${isVisible ? '0' : '20px'})` }}>
-            {icon}
-            <span className="ml-3 font-medium">{message}</span>
-            <button onClick={onClose} className="ml-4 -mr-1 p-1.5 rounded-full hover:bg-white/20 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-        </div>
-    );
-};
 
 const App: React.FC = () => {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -62,6 +36,7 @@ const App: React.FC = () => {
 
     const { 
         isInitialLoad,
+        isRefreshing: isRefreshingFilters,
         datesForMonth,
         activeFilter,
         availableFilters,
@@ -77,6 +52,7 @@ const App: React.FC = () => {
         activeFilter?.type === 'date' ? activeFilter.value : null,
         timeSlot
     );
+    
     const { data: filteredArticleIdsFromQuery, isLoading: isFilterLoading } = useFilteredArticles(
         (activeFilter?.type === 'category' || activeFilter?.type === 'tag') ? activeFilter.value : null
     );
@@ -110,37 +86,60 @@ const App: React.FC = () => {
         handleCloseArticleDetail,
     } = useReader();
 
-    const { mutate: updateArticleState } = useUpdateArticleState();
-    const { mutate: markAllAsRead, isLoading: isMarkingAsRead } = useMarkAllAsRead();
+    const { mutateAsync: updateArticleState, isPending: isUpdatingArticle } = useUpdateArticleState();
+    
+    // 1. 【核心修复】从 useMarkAllAsRead Hook 中获取 isLoading 状态
+    const { mutate: markAllAsRead, isPending: isMarkingAsRead } = useMarkAllAsRead();
 
     const handleArticleStateChange = (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => {
-        updateArticleState({ articleId, tagsToAdd, tagsToRemove });
+        return updateArticleState({ articleId, tagsToAdd, tagsToRemove }, {
+            onSuccess: (data, variables, context) => {
+                const updatedArticle = context?.updatedArticle;
+                if (updatedArticle && sidebarArticle && sidebarArticle.id === updatedArticle.id) {
+                    handleShowArticleInMain(updatedArticle);
+                }
+            },
+            onError: (error, variables, context) => {
+                const originalArticle = context?.originalArticle;
+                if (originalArticle && sidebarArticle && sidebarArticle.id === originalArticle.id) {
+                    handleShowArticleInMain(originalArticle);
+                }
+            }
+        });
     };
 
-    const handleMarkAllClick = () => {
-        let idsToMark: (string | number)[] = [];
-        if (sidebarArticle) {
-            idsToMark = [sidebarArticle.id];
-        } else if (activeFilter?.type === 'date') {
-            idsToMark = briefingArticleIds || [];
-        } else if (activeFilter?.type === 'category' || activeFilter?.type === 'tag') {
-            idsToMark = filteredArticleIds || [];
-        }
+const handleMarkAllClick = () => {
+    let idsToMark: (string | number)[] = [];
+    if (sidebarArticle) {
+        idsToMark = [sidebarArticle.id];
+    } else if (activeFilter?.type === 'date') {
+        idsToMark = briefingArticleIds || [];
+    } else if (activeFilter?.type === 'category' || activeFilter?.type === 'tag') {
+        idsToMark = filteredArticleIds || [];
+    }
 
-        if (idsToMark.length > 0) {
-            markAllAsRead(idsToMark, {
-                onSuccess: () => {
-                    showToast(`已将 ${idsToMark.length} 篇文章设为已读`, 'success');
+    if (idsToMark.length > 0) {
+        // 在调用 mutate 之前，先清除可能残留的成功状态
+        setIsMarkingSuccess(false); 
+        
+        markAllAsRead(idsToMark, {
+            onSuccess: (markedIds) => {
+                if (markedIds && markedIds.length > 0) {
+                    // API 成功后，立即设置成功状态
                     setIsMarkingSuccess(true);
+                    // 2秒后自动恢复正常状态
                     setTimeout(() => setIsMarkingSuccess(false), 2000);
-                },
-                onError: () => showToast('标记已读失败', 'error'),
-            });
-        } else {
-            showToast('没有文章需要标记', 'info');
-        }
-    };
-
+                }
+            },
+            onError: () => {
+                // 失败时，确保成功状态被清除
+                setIsMarkingSuccess(false);
+            }
+        });
+    } else {
+        showToast('没有文章需要标记', 'info');
+    }
+};
     const combinedRefresh = useCallback(async () => {
         await refreshFilters();
     }, [refreshFilters]);
@@ -158,7 +157,6 @@ const App: React.FC = () => {
     const mainContentRef = useRef<HTMLDivElement | null>(null);
     const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
     
-    // 【核心修复】isLoading 的计算逻辑已更新
     const isLoading = isInitialLoad || isBriefingLoading || isFilterLoading;
 
     useEffect(() => {
@@ -184,8 +182,8 @@ const App: React.FC = () => {
             )}
             <div className={`h-full bg-gray-50 border-r border-gray-200 z-50 transition-all duration-300 ease-in-out ${!isMdUp ? `fixed top-0 left-0 w-64 ${isSidebarCollapsed ? '-translate-x-full' : 'translate-x-0'}` : `md:fixed md:top-0 md:bottom-0 md:left-0 md:w-80 md:overflow-y-auto ${isSidebarCollapsed ? 'md:w-0 md:opacity-0 md:overflow-hidden' : 'md:w-80 md:opacity-100'}`}`}>
                 <Sidebar 
-                    datesForMonth={datesForMonth}
-                    isLoading={isInitialLoad}
+                    isInitialLoading={isInitialLoad}
+                    isRefreshingFilters={isRefreshingFilters}
                     availableMonths={availableMonths}
                     selectedMonth={selectedMonth}
                     onMonthChange={setSelectedMonth}
@@ -202,10 +200,10 @@ const App: React.FC = () => {
                         if (!isMdUp) setIsSidebarCollapsed(true);
                     }}
                     onRefresh={combinedRefresh}
+                    datesForMonth={datesForMonth}
                 />
             </div>
 
-            {/* 【核心修复】补上缺失的按钮 */}
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                 className={`fixed top-5 p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 z-50
@@ -269,16 +267,18 @@ const App: React.FC = () => {
                         </div>
                     )}
                     <button 
-                        onClick={handleMarkAllClick}
-                        disabled={isMarkingAsRead} 
-                        className={`p-3 text-white rounded-full shadow-lg transition-all disabled:bg-gray-500 ${isMarkingSuccess ? 'bg-green-500' : 'bg-gray-800 hover:bg-gray-950'}`} 
+                         onClick={handleMarkAllClick}
+                        disabled={isMarkingAsRead || isUpdatingArticle} 
+                        className={`p-3 text-white rounded-full shadow-lg transition-all disabled:bg-gray-500 ${
+                            isMarkingSuccess ? 'bg-green-500' : 'bg-gray-800 hover:bg-gray-950'
+                        }`} 
                         aria-label="Mark all as read"
                     >
                         {isMarkingAsRead ? (
-                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        ) : (
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        )}
+                                <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            )}
                     </button>
                     <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all" aria-label="Back to top">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>

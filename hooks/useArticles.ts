@@ -8,6 +8,7 @@ import {
     getArticlesDetails,
     getArticleStates,
     editArticleTag,
+    editArticleState,
     markAllAsRead as apiMarkAllAsRead
 } from '../services/api';
 import { useArticleStore } from '../store/articleStore';
@@ -49,7 +50,7 @@ export const useBriefingArticles = (date: string | null, slot: string | null) =>
             addArticles(completeArticles);
             return completeArticles.map(a => a.id);
         },
-        enabled: !!date, // 只有当 date 存在时才执行查询
+        enabled: !!date,
     });
 };
 
@@ -72,7 +73,8 @@ export const useFilteredArticles = (filterValue: string | null) => {
 
 // 3. 获取收藏文章
 export const useStarredArticles = () => {
-    const { addArticles, setStarredArticleIds } = useArticleStore.getState();
+    const addArticles = useArticleStore(state => state.addArticles);
+    const setStarredArticleIds = useArticleStore(state => state.setStarredArticleIds);
 
     return useQuery({
         queryKey: ['starred'],
@@ -92,39 +94,46 @@ export const useStarredArticles = () => {
 // 4. 更新文章状态 (标签、收藏、已读)
 export const useUpdateArticleState = () => {
     const queryClient = useQueryClient();
-    const { updateArticle } = useArticleStore.getState();
-    const articlesById = useArticleStore.getState().articlesById;
+    const updateArticle = useArticleStore((state) => state.updateArticle);
+    const articlesById = useArticleStore((state) => state.articlesById);
 
     return useMutation({
         mutationFn: async ({ articleId, tagsToAdd, tagsToRemove }: { articleId: string | number, tagsToAdd: string[], tagsToRemove: string[] }) => {
-            return editArticleTag(articleId, tagsToAdd, tagsToRemove);
+            const stateTagsToAdd = tagsToAdd.filter(t => t.startsWith('user/-/state'));
+            const stateTagsToRemove = tagsToRemove.filter(t => t.startsWith('user/-/state'));
+            for (const tag of stateTagsToAdd) {
+                if (tag.includes('starred')) await editArticleState(articleId, 'star', true);
+                if (tag.includes('read')) await editArticleState(articleId, 'read', true);
+            }
+            for (const tag of stateTagsToRemove) {
+                if (tag.includes('starred')) await editArticleState(articleId, 'star', false);
+                if (tag.includes('read')) await editArticleState(articleId, 'read', false);
+            }
+            const userTagsToAdd = tagsToAdd.filter(t => !t.startsWith('user/-/state'));
+            const userTagsToRemove = tagsToRemove.filter(t => !t.startsWith('user/-/state'));
+            if (userTagsToAdd.length > 0 || userTagsToRemove.length > 0) {
+                await editArticleTag(articleId, userTagsToAdd, userTagsToRemove);
+            }
         },
         onMutate: async ({ articleId, tagsToAdd, tagsToRemove }) => {
-            await queryClient.cancelQueries(); // 取消所有可能冲突的查询
+            await queryClient.cancelQueries();
             const articleToUpdate = articlesById[articleId];
-            if (!articleToUpdate) return;
-
+            if (!articleToUpdate) return { originalArticle: null };
             const originalArticle = { ...articleToUpdate };
-
             const finalTagsSet = new Set(articleToUpdate.tags || []);
             tagsToAdd.forEach(tag => finalTagsSet.add(tag));
             tagsToRemove.forEach(tag => finalTagsSet.delete(tag));
             const updatedArticle = { ...articleToUpdate, tags: Array.from(finalTagsSet) };
-
-            // 乐观更新 Zustand Store
             updateArticle(updatedArticle);
-
-            return { originalArticle }; // 返回快照
+            return { originalArticle, updatedArticle };
         },
         onError: (err, variables, context) => {
-            // 如果出错，回滚 Zustand Store
             if (context?.originalArticle) {
                 updateArticle(context.originalArticle);
             }
         },
         onSettled: () => {
-            // 无论成功失败，都让 'starred' 查询失效，以确保收藏列表的准确性
-            queryClient.invalidateQueries(['starred']);
+            queryClient.invalidateQueries({ queryKey: ['starred'] });
         },
     });
 };
@@ -132,14 +141,15 @@ export const useUpdateArticleState = () => {
 // 5. 批量标记已读
 export const useMarkAllAsRead = () => {
     const queryClient = useQueryClient();
-    const { updateArticle } = useArticleStore.getState();
-    const articlesById = useArticleStore.getState().articlesById;
+    const updateArticle = useArticleStore((state) => state.updateArticle);
+    const articlesById = useArticleStore((state) => state.articlesById);
 
     return useMutation({
         mutationFn: apiMarkAllAsRead,
         onMutate: async (articleIds) => {
             await queryClient.cancelQueries();
             const originalArticles = articleIds.map(id => articlesById[id]).filter(Boolean);
+            if(originalArticles.length === 0) return { originalArticles: [] };
             
             const updatedArticles = originalArticles.map(article => {
                 if (article.tags?.includes('user/-/state/com.google/read')) return article;
@@ -147,11 +157,10 @@ export const useMarkAllAsRead = () => {
             });
 
             updatedArticles.forEach(updateArticle);
-
             return { originalArticles };
         },
         onError: (err, variables, context) => {
-            context?.originalArticles.forEach(updateArticle);
+            context?.originalArticles?.forEach(updateArticle);
         },
     });
 };
