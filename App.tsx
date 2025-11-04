@@ -11,9 +11,10 @@ import LoadingSpinner from './components/LoadingSpinner';
 import Toast from './components/Toast';
 import { Article, Tag, BriefingReport, GroupedArticles } from './types';
 import { useArticleStore } from './store/articleStore';
-
+import { useQueryClient } from '@tanstack/react-query';
 import { useFilters } from './hooks/useFilters';
 import { useReader } from './hooks/useReader';
+import { getTodayInShanghai } from './services/api';
 import { 
     useBriefingArticles, 
     useFilteredArticles, 
@@ -27,7 +28,8 @@ const App: React.FC = () => {
     const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' | 'info' }>({ isVisible: false, message: '', type: 'info' });
     const [isMarkingSuccess, setIsMarkingSuccess] = useState(false);
     const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
-    
+    const queryClient = useQueryClient();
+
     const articlesById = useArticleStore((state) => state.articlesById);
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setToast({ isVisible: true, message, type });
@@ -48,10 +50,10 @@ const App: React.FC = () => {
         refreshFilters,
     } = useFilters();
 
-    const { data: briefingArticleIds, isLoading: isBriefingLoading } = useBriefingArticles(
-        activeFilter?.type === 'date' ? activeFilter.value : null,
-        timeSlot
-    );
+    const { data: briefingArticleIds, isLoading: isBriefingLoading, isFetching: isBriefingFetching } = useBriefingArticles(
+    activeFilter?.type === 'date' ? activeFilter.value : null,
+    timeSlot
+);
     
     const { data: filteredArticleIdsFromQuery, isLoading: isFilterLoading } = useFilteredArticles(
         (activeFilter?.type === 'category' || activeFilter?.type === 'tag') ? activeFilter.value : null
@@ -87,7 +89,7 @@ const App: React.FC = () => {
     } = useReader();
 
     const { mutateAsync: updateArticleState, isPending: isUpdatingArticle } = useUpdateArticleState();
-    
+  const [isRefreshingHome, setIsRefreshingHome] = useState(false);
     // 1. 【核心修复】从 useMarkAllAsRead Hook 中获取 isLoading 状态
     const { mutate: markAllAsRead, isPending: isMarkingAsRead } = useMarkAllAsRead();
 
@@ -157,9 +159,24 @@ const onMonthChange = useCallback((month: string) => {
     setSelectedMonth(month);
 }, [setSelectedMonth]);
 
-const combinedRefresh = useCallback(async () => {
-    await refreshFilters();
-}, [refreshFilters]);
+   // --- 将这一整段 handleRefreshToHome 函数替换掉 ---
+    const handleRefreshToHome = useCallback(async () => {
+    // 1. 关闭可能打开的全文视图
+    handleCloseArticleDetail();
+    
+    // 2. 强制让所有 'briefing' 查询失效，这是触发重新获取的关键
+    await queryClient.invalidateQueries({ queryKey: ['briefing'] });
+    
+    // 3. 调用 useFilters 提供的重置函数，这会更新 activeFilter
+    //    并自动触发 useBriefingArticles 重新运行
+    handleResetFilter();
+
+    // 4. 滚动到页面顶部
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    // 5. 给出反馈
+    showToast("正在刷新今日简报...", "info");
+}, [queryClient, handleCloseArticleDetail, handleResetFilter, showToast]);
 
     useEffect(() => {
         const updateViewport = () => {
@@ -174,7 +191,7 @@ const combinedRefresh = useCallback(async () => {
     const mainContentRef = useRef<HTMLDivElement | null>(null);
     const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
     
-    const isLoading = isInitialLoad || isBriefingLoading || isFilterLoading;
+    const isLoading = isInitialLoad || isBriefingLoading || isFilterLoading || isBriefingFetching;
 
     useEffect(() => {
         if (!isSidebarCollapsed && !isMdUp) {
@@ -208,7 +225,7 @@ const combinedRefresh = useCallback(async () => {
                     activeFilter={activeFilter}
                     onFilterChange={onFilterChange}
                     onOpenArticle={onOpenArticle}
-                    onRefresh={combinedRefresh}
+                    onRefresh={handleRefreshToHome}
                     datesForMonth={datesForMonth}
                 />
             </div>
@@ -264,6 +281,17 @@ const combinedRefresh = useCallback(async () => {
                 )}
                 
                 <div className="fixed bottom-8 right-8 z-20 flex flex-col-reverse items-center gap-y-3">
+                    {/* 【新增】手动刷新按钮 */}
+                          <button 
+                                onClick={handleRefreshToHome}
+                                disabled={isBriefingFetching}
+                                className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all"
+                                aria-label="Refresh to today's briefing"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582A7.962 7.962 0 0112 4.062a8.002 8.002 0 018 8.002 8.002 8.002 0 01-8 8.002A7.962 7.962 0 014.582 15H4v5" />
+                                </svg>
+                            </button>
                     {sidebarArticle && (
                         <div className="relative" onClick={(e) => e.stopPropagation()}>
                             <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className="p-3 bg-sky-600 text-white rounded-full shadow-lg hover:bg-sky-700 transition-all" aria-label="Tag article">
