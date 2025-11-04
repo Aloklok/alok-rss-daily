@@ -229,7 +229,7 @@ const onMonthChange = useCallback((month: string) => {
                     activeArticleId={sidebarArticle?.id}
                     onFilterChange={onFilterChange}
                     onOpenArticle={onOpenArticle}
-                    onRefresh={handleRefreshToHome}
+                    onRefresh={refreshFilters}
                     datesForMonth={datesForMonth}
                 />
             </div>
