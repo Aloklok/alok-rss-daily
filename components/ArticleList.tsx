@@ -1,17 +1,39 @@
 // components/ArticleList.tsx
 
-import React, { memo } from 'react';
-import { Article } from '../types';
+import React, { memo, useMemo } from 'react';
+import { Article, Filter } from '../types';
 import { useArticleStore } from '../store/articleStore';
 
 interface ArticleListProps {
-  articleIds: (string | number)[]; // Now receives IDs
+  articleIds: (string | number)[];
   onOpenArticle: (article: Article) => void;
   isLoading: boolean;
+  activeFilter: Filter | null;
 }
 
-const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, isLoading }) => {
-  // 1. 先处理加载状态
+const GRADIENTS = [
+    'from-rose-400 via-fuchsia-500 to-indigo-500', 'from-green-400 via-cyan-500 to-blue-500',
+    'from-amber-400 via-orange-500 to-red-500', 'from-teal-400 via-sky-500 to-purple-500',
+    'from-lime-400 via-emerald-500 to-cyan-500'
+];
+
+const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, isLoading, activeFilter }) => {
+  const articlesById = useArticleStore((state) => state.articlesById);
+  const articles = articleIds.map(id => articlesById[id]).filter(Boolean) as Article[];
+
+  const randomGradient = useMemo(() => {
+    if (!activeFilter) return GRADIENTS[0];
+    const hash = activeFilter.value.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
+    return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
+  }, [activeFilter]);
+
+  const filterLabel = useMemo(() => {
+    if (!activeFilter) return '文章';
+    const parts = activeFilter.value.split('/');
+    const lastPart = parts[parts.length - 1];
+    return decodeURIComponent(lastPart);
+  }, [activeFilter]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-80">
@@ -20,11 +42,6 @@ const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, is
     );
   }
 
-  // 2. 从 Store 中订阅并重构文章列表
-  const articlesById = useArticleStore((state) => state.articlesById);
-  const articles = articleIds.map(id => articlesById[id]).filter(Boolean) as Article[];
-
-  // 3. 然后处理空状态
   if (articles.length === 0) {
     return (
       <div className="p-8 text-center text-gray-500">
@@ -33,10 +50,13 @@ const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, is
     );
   }
 
-  // 4. 最后渲染列表
   return (
-    <div className="p-4">
-      <h2 className="text-2xl font-bold text-gray-900 mb-4">文章列表</h2>
+    <div className="p-4 md:p-8 lg:p-10">
+      <header className={`relative mb-6 md:mb-12 bg-gradient-to-br ${randomGradient} rounded-2xl p-4 md:p-8 text-white shadow-lg`}>
+        <h1 className="text-4xl md:text-5xl font-serif font-bold leading-none tracking-tight">
+          {filterLabel}
+        </h1>
+      </header>
       <div className="space-y-0.5">
         {articles.map((article) => (
           <div

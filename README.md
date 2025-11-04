@@ -17,7 +17,13 @@ Briefing Hub 是一个基于 React 和 TypeScript 构建的现代化 RSS 阅读�
 - **高性能数据获取**：利用缓存、后台刷新和请求优化，提供流畅、快速的浏览体验。
 - **渐进式 Web 应用 (PWA)**：支持离线访问和快速加载，提供接近原生应用的体验。
 
+## 用户界面 (UI) 交互
 
+- **全局侧边栏切换**：在移动设备上，侧边栏可以通过屏幕顶部的按钮进行展开和折叠。在桌面视图中，侧边栏始终可见，但其宽度可根据折叠状态调整。当进入文章阅读模式时，此按钮会自动隐藏，以提供沉浸式阅读体验。
+- **阅读模式浮动操作**：当文章在阅读模式下打开时，右下角会显示一组浮动按钮，提供便捷操作：
+  - **返回首页**：快速返回到每日简报视图。
+  - **添加/编辑标签**：管理当前文章的自定义标签。
+  - **收藏/取消收藏**：将文章添加到收藏夹或从中移除。
 
 ## 技术栈
 
@@ -83,10 +89,12 @@ CREATE TABLE public.articles (
 ### 状态与数据流架构
 
 #### 1. `services/api.ts` - 原始 API 层
-- **职责**: 作为最底层的通信模块，只负责与后端 API 端点进行原始的 `fetch` 通信，对返回的数据不做任何处理。
+- **职责**: 作为最底层的通信模块，只负责与后端 API 端点进行原始的 `fetch` 通信，对返回的数据不做任何处理。此外，它也包含一些客户端辅助函数，如 `getCurrentTimeSlotInShanghai`，用于处理时区相关的计算。
 
 #### 2. `services/articleLoader.ts` - 数据加载与融合层
-- **职责**: **核心业务逻辑层**。它封装了所有复杂的数据融合过程。例如，`fetchStarredArticles` 函数会先从 `api.ts` 调用 `getStarredArticles` 获取 FreshRSS 数据，再调用 `getArticlesDetails` 获取 Supabase 数据，然后将两者合并成一个完整的 `Article` 对象数组。
+- **职责**: **核心业务逻辑层**。它封装了所有复杂的数据融合与转换过程。
+  - **数据融合**: 例如，`fetchStarredArticles` 函数会先从 `api.ts` 调用 `getStarredArticles` 获取 FreshRSS 数据，再调用 `getArticlesDetails` 获取 Supabase 数据，然后将两者合并成一个完整的 `Article` 对象数组。
+  - **数据转换**: 例如，`fetchBriefingArticles` 函数会将从 Supabase 返回的 `verdict.importance` 字段（如 "重要新闻"）映射到前端 `Article` 模型中统一的 `briefingSection` 字段，确保文章可以在 UI 中被正确分组。
 - **优点**: 将业务逻辑与 React Hooks 解耦，使其变得可独立测试和复用。
 
 #### 3. `hooks/useArticles.ts` - 服务器状态连接层 (React Query)
@@ -98,7 +106,7 @@ CREATE TABLE public.articles (
 - **职责**: 应用的**“单一事实来源”**。它存储了所有经过融合的、完整的文章数据 (`articlesById`) 和重要的 UI 索引（如 `starredArticleIds`），确保所有组件都能访问到一致的、最新的状态。
 
 #### 5. `App.tsx` 与 UI 组件 - 消费与渲染层
-- **职责**: `App.tsx` 从 `use...Articles` Hooks 触发数据获取，并从 `articleStore` 订阅数据。然后，它使用 `useMemo` 将 Store 中的数据重构成适合 UI 展示的格式（如 `reports`），并传递给下层的纯展示组件（如 `Briefing`, `ArticleList`）。
+- **职责**: `App.tsx` 负责确定初始数据加载的上下文（例如，通过调用 `getCurrentTimeSlotInShanghai` 设置初始时间槽），然后从 `use...Articles` Hooks 触发数据获取，并从 `articleStore` 订阅数据。最后，它使用 `useMemo` 将 Store 中的数据重构成适合 UI 展示的格式（如 `reports`），并传递给下层的纯展示组件（如 `Briefing`, `ArticleList`）。
 
 ## 后端 API (Vercel Serverless Functions)
 

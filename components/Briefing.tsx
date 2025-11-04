@@ -174,17 +174,6 @@ const Briefing: React.FC<BriefingProps> = ({ reports, activeFilter, timeSlot, se
           return (
              <header className={`relative mb-6 md:mb-12 bg-gradient-to-br ${randomGradient} rounded-2xl p-4 md:p-8 text-white shadow-lg`}>
                 
-                <button
-                    onClick={onToggleSidebar}
-                    className="md:hidden absolute top-4 right-4 p-2 bg-white/20 rounded-full z-10"
-                >
-                    {isSidebarCollapsed ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-                    ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="2" /><path d="M9 4v16" strokeWidth="2" /></svg>
-                    )}
-                </button>
-
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex-grow">
                         <div className="mb-4">

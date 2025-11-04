@@ -22,9 +22,10 @@ interface ActionButtonsProps {
     availableUserTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
+    className?: string; // 允许从外部传入 className
 }
 
-const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableUserTags, onReaderModeRequest, onStateChange }) => {
+const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableUserTags, onReaderModeRequest, onStateChange, className }) => {
     const STAR_TAG = 'user/-/state/com.google/starred';
     const READ_TAG = 'user/-/state/com.google/read';
     
@@ -62,7 +63,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableUserTag
     const mobileActionButtonClass = "flex flex-col items-center justify-center h-16 w-16 text-xs font-medium rounded-full p-1 gap-1";
 
     return (
-        <div className="relative mt-8">
+        <div className={`relative mt-6 md:mt-8 ${className || ''}`}>
             {/* Desktop Buttons */}
             <div className="hidden md:flex flex-col">
                 <div className="flex items-center justify-between">

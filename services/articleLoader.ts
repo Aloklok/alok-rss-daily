@@ -34,9 +34,10 @@ export async function fetchBriefingArticles(date: string, slot: string | null): 
     const articleIds = supaArticles.map(a => a.id);
     const statesById = await getArticleStates(articleIds);
 
-    // 为 “Supabase文章” 补充 “FreshRSS状态”
+    // 为 “Supabase文章” 补充 “FreshRSS状态” 并进行数据转换
     return supaArticles.map(supaArticle => ({
         ...supaArticle,
+        briefingSection: supaArticle.verdict?.importance || '常规更新',
         tags: statesById[supaArticle.id] || [],
     }));
 }

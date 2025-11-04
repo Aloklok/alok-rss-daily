@@ -12,7 +12,8 @@ interface SidebarProps {
     onMonthChange: (month: string) => void;
     availableFilters: AvailableFilters;
     activeFilter: Filter | null;
-    onFilterChange: (filter: Filter) => void;
+    activeArticleId?: string | number; // 新增 prop
+    onFilterChange: (filter: Filter | null) => void;
     onOpenArticle?: (article: Article) => void;
     onRefresh?: () => Promise<void>;
     datesForMonth: string[];
@@ -33,6 +34,7 @@ const Sidebar = React.memo<SidebarProps>(({
     onMonthChange,
     availableFilters,
     activeFilter,
+    activeArticleId,
     onFilterChange,
     onOpenArticle,
     onRefresh,
@@ -98,7 +100,7 @@ const renderFiltersTab = () => (
                             <div className="px-3 py-2 text-sm text-gray-500">暂无收藏</div>
                         ) : (
                             starredArticles.map(article => (
-                                <button key={article.id} onClick={() => onOpenArticle ? onOpenArticle(article) : onFilterChange({ type: 'starred', value: 'true' })} className={listItemButtonClass(isFilterActive('starredArticle', article.id.toString()))}>
+                                <button key={article.id} onClick={() => onOpenArticle ? onOpenArticle(article) : onFilterChange({ type: 'starred', value: 'true' })} className={listItemButtonClass(activeArticleId === article.id)}>
                                     <span className="truncate">{article.title}</span>
                                 </button>
                             ))
@@ -146,7 +148,7 @@ const renderFiltersTab = () => (
                 <span>🏷️</span>
                 <span className="flex-1">标签</span>
             </div>
-            <div className="grid grid-cols-2 gap-x-2 gap-y-1 px-3">
+            <div className="grid grid-cols-1 gap-y-1 px-3 md:grid-cols-2 md:gap-x-2">
                  {availableFilters.tags.map(tag => (
                     <button
                         key={tag.id}

@@ -14,7 +14,7 @@ import { useArticleStore } from './store/articleStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFilters } from './hooks/useFilters';
 import { useReader } from './hooks/useReader';
-import { getTodayInShanghai } from './services/api';
+import { getTodayInShanghai, getCurrentTimeSlotInShanghai } from './services/api';
 import { 
     useBriefingArticles, 
     useFilteredArticles, 
@@ -27,7 +27,7 @@ const App: React.FC = () => {
     const [isMdUp, setIsMdUp] = useState<boolean>(false);
     const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' | 'info' }>({ isVisible: false, message: '', type: 'info' });
     const [isMarkingSuccess, setIsMarkingSuccess] = useState(false);
-    const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
+    const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(() => getCurrentTimeSlotInShanghai());
     const queryClient = useQueryClient();
 
     const articlesById = useArticleStore((state) => state.articlesById);
@@ -82,6 +82,7 @@ const App: React.FC = () => {
         isReaderLoading,
         isReaderVisible,
         sidebarArticle,
+        articleForReader,
         handleOpenReader,
         handleShowArticleInMain,
         handleCloseReader,
@@ -151,7 +152,7 @@ const onFilterChange = useCallback((filter: Filter) => {
 
 const onOpenArticle = useCallback((article: Article) => {
     handleShowArticleInMain(article);
-    handleFilterChange({ type: 'starredArticle', value: article.id.toString() });
+    handleFilterChange(null);
     if (!isMdUp) setIsSidebarCollapsed(true);
 }, [handleShowArticleInMain, handleFilterChange, isMdUp]);
 
@@ -164,19 +165,21 @@ const onMonthChange = useCallback((month: string) => {
     // 1. 关闭可能打开的全文视图
     handleCloseArticleDetail();
     
-    // 2. 强制让所有 'briefing' 查询失效，这是触发重新获取的关键
+    // 2. 【新增】设置当前时间槽，确保获取最新的简报
+    setTimeSlot(getCurrentTimeSlotInShanghai());
+
+    // 3. 强制让所有 'briefing' 查询失效，这是触发重新获取的关键
     await queryClient.invalidateQueries({ queryKey: ['briefing'] });
     
-    // 3. 调用 useFilters 提供的重置函数，这会更新 activeFilter
+    // 4. 调用 useFilters 提供的重置函数，这会更新 activeFilter
     //    并自动触发 useBriefingArticles 重新运行
     handleResetFilter();
 
-    // 4. 滚动到页面顶部
+    // 5. 滚动到页面顶部
     window.scrollTo({ top: 0, behavior: 'smooth' });
     
-    // 5. 给出反馈
-    showToast("正在刷新今日简报...", "info");
-}, [queryClient, handleCloseArticleDetail, handleResetFilter, showToast]);
+    // 6. 给出反馈 (已移除)
+}, [queryClient, handleCloseArticleDetail, handleResetFilter, setTimeSlot]);
 
     useEffect(() => {
         const updateViewport = () => {
@@ -223,6 +226,7 @@ const onMonthChange = useCallback((month: string) => {
                     onMonthChange={onMonthChange}
                     availableFilters={availableFilters}
                     activeFilter={activeFilter}
+                    activeArticleId={sidebarArticle?.id}
                     onFilterChange={onFilterChange}
                     onOpenArticle={onOpenArticle}
                     onRefresh={handleRefreshToHome}
@@ -243,6 +247,21 @@ const onMonthChange = useCallback((month: string) => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                 ) : (
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="2" /><path d="M9 4v16" strokeWidth="2" /></svg>
+                )}
+            </button>
+
+            {/* Global Sidebar Toggle for Mobile (in-content) */}
+            <button
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className={`md:hidden fixed top-5 right-5 z-10 p-2 rounded-full transition-all duration-300 ease-in-out
+                    ${sidebarArticle || isReaderVisible ? 'hidden' : ''}
+                    ${isSidebarCollapsed ? 'bg-gray-800 text-white' : 'bg-white/20 text-white'}
+                `}
+            >
+                {isSidebarCollapsed ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="2" /><path d="M9 4v16" strokeWidth="2" /></svg>
                 )}
             </button>
 
@@ -275,6 +294,7 @@ const onMonthChange = useCallback((month: string) => {
                         articleIds={filteredArticleIds}
                         onOpenArticle={handleOpenReader}
                         isLoading={isLoading}
+                        activeFilter={activeFilter}
                     />
                 ) : (
                     <div className="p-8 text-center text-gray-500">选择一个分类或标签查看文章。</div>
@@ -286,10 +306,11 @@ const onMonthChange = useCallback((month: string) => {
                                 onClick={handleRefreshToHome}
                                 disabled={isBriefingFetching}
                                 className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all"
-                                aria-label="Refresh to today's briefing"
+                                aria-label="Back to today's briefing"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582A7.962 7.962 0 0112 4.062a8.002 8.002 0 018 8.002 8.002 8.002 0 01-8 8.002A7.962 7.962 0 014.582 15H4v5" />
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
                                 </svg>
                             </button>
                     {sidebarArticle && (
@@ -307,20 +328,45 @@ const onMonthChange = useCallback((month: string) => {
                             )}
                         </div>
                     )}
-                    <button 
-                         onClick={handleMarkAllClick}
-                        disabled={isMarkingAsRead || isUpdatingArticle} 
-                        className={`p-3 text-white rounded-full shadow-lg transition-all disabled:bg-gray-500 ${
-                            isMarkingSuccess ? 'bg-green-500' : 'bg-gray-800 hover:bg-gray-950'
-                        }`} 
-                        aria-label="Mark all as read"
-                    >
-                        {isMarkingAsRead ? (
-                                <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    {sidebarArticle ? (
+                        <button
+                            onClick={() => {
+                                const STAR_TAG = 'user/-/state/com.google/starred';
+                                const isStarred = sidebarArticle.tags?.includes(STAR_TAG);
+                                handleArticleStateChange(sidebarArticle.id, isStarred ? [] : [STAR_TAG], isStarred ? [STAR_TAG] : []);
+                            }}
+                            disabled={isUpdatingArticle}
+                            className={`p-3 text-white rounded-full shadow-lg transition-all disabled:bg-gray-500 ${
+                                sidebarArticle.tags?.includes('user/-/state/com.google/starred') ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-800 hover:bg-gray-950'
+                            }`}
+                            aria-label={sidebarArticle.tags?.includes('user/-/state/com.google/starred') ? 'Remove from favorites' : 'Add to favorites'}
+                        >
+                            {sidebarArticle.tags?.includes('user/-/state/com.google/starred') ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
                             ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                </svg>
                             )}
-                    </button>
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={handleMarkAllClick}
+                            disabled={isMarkingAsRead || isUpdatingArticle} 
+                            className={`p-3 text-white rounded-full shadow-lg transition-all disabled:bg-gray-500 ${
+                                isMarkingSuccess ? 'bg-green-500' : 'bg-gray-800 hover:bg-gray-950'
+                            }`} 
+                            aria-label="Mark all as read"
+                        >
+                            {isMarkingAsRead ? (
+                                    <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                )}
+                        </button>
+                    )}
                     <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all" aria-label="Back to top">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                     </button>
@@ -331,6 +377,10 @@ const onMonthChange = useCallback((month: string) => {
                     isLoading={isReaderLoading}
                     content={readerContent}
                     onClose={handleCloseReader}
+                    article={articleForReader}
+                    availableUserTags={availableFilters.tags}
+                    onStateChange={handleArticleStateChange}
+                    onGoHome={handleRefreshToHome}
                 />
                 <Toast 
                     message={toast.message} 

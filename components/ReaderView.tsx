@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
-import { CleanArticleContent } from '../types';
+import React, { useEffect, useState } from 'react';
+import { CleanArticleContent, Article, Tag } from '../types';
+import TagPopover from './TagPopover'; // 【新增】导入 TagPopover
 
 const LoadingSpinner: React.FC = () => (
     <div className="flex items-center justify-center h-full w-full">
@@ -7,15 +8,31 @@ const LoadingSpinner: React.FC = () => (
     </div>
 );
 
+// 【修改】更新 Props 接口
 interface ReaderViewProps {
     isVisible: boolean;
     isLoading: boolean;
     content: CleanArticleContent | null;
     onClose: () => void;
+    article: Article | null; // 新增：当前文章对象
+    availableUserTags: Tag[]; // 新增：可用的用户标签
+    onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => void; // 新增：状态变更回调
+    onGoHome: () => void; // 新增：返回首页回调
 }
 
-const ReaderView: React.FC<ReaderViewProps> = ({ isVisible, isLoading, content, onClose }) => {
+const ReaderView: React.FC<ReaderViewProps> = ({ 
+    isVisible, 
+    isLoading, 
+    content, 
+    onClose,
+    article,
+    availableUserTags,
+    onStateChange,
+    onGoHome
+}) => {
     
+    const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false); // 【新增】管理 TagPopover 状态
+
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
@@ -39,6 +56,13 @@ const ReaderView: React.FC<ReaderViewProps> = ({ isVisible, isLoading, content, 
         };
     }, [isVisible]);
 
+    // 【新增】当 ReaderView 关闭时，也关闭 TagPopover
+    useEffect(() => {
+        if (!isVisible) {
+            setIsTagPopoverOpen(false);
+        }
+    }, [isVisible]);
+
     return (
         <>
             <div 
@@ -52,7 +76,7 @@ const ReaderView: React.FC<ReaderViewProps> = ({ isVisible, isLoading, content, 
                     isVisible ? 'translate-x-0' : 'translate-x-full'
                 }`}
             >
-                <div className="h-full flex flex-col">
+                <div className="h-full flex flex-col relative"> {/* 【修改】添加 relative 定位上下文 */}
                     <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
                         {isLoading ? (
                             <div className="h-6 bg-gray-200 rounded-md w-1/2 animate-pulse"></div>
@@ -81,23 +105,6 @@ const ReaderView: React.FC<ReaderViewProps> = ({ isVisible, isLoading, content, 
                                     className="prose prose-lg max-w-none text-gray-800 leading-relaxed"
                                     dangerouslySetInnerHTML={{ __html: content.content }} 
                                 />
-                                <script
-                                  dangerouslySetInnerHTML={{
-                                    __html: `
-                                      // Ensure images have width and height attributes to prevent CLS
-                                      document.addEventListener('DOMContentLoaded', function() {
-                                        const images = document.querySelectorAll('.prose img');
-                                        images.forEach(img => {
-                                          if (!img.hasAttribute('width') && !img.hasAttribute('height')) {
-                                            img.setAttribute('loading', 'lazy');
-                                            img.style.width = '100%';
-                                            img.style.height = 'auto';
-                                          }
-                                        });
-                                      });
-                                    `,
-                                  }}
-                                />
                             </article>
                         ) : (
                              <div className="p-8 text-center text-gray-500">
@@ -105,6 +112,58 @@ const ReaderView: React.FC<ReaderViewProps> = ({ isVisible, isLoading, content, 
                             </div>
                         )}
                     </div>
+
+                    {/* 【核心新增】浮动按钮组 */}
+                    {article && (
+                        <div className="absolute bottom-8 right-8 z-50 flex flex-col-reverse items-center gap-y-3">
+                            <button 
+                                onClick={onGoHome}
+                                className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all"
+                                aria-label="Back to today's briefing"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                                </svg>
+                            </button>
+                            
+                            <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className="p-3 bg-sky-600 text-white rounded-full shadow-lg hover:bg-sky-700 transition-all" aria-label="Tag article">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                                </button>
+                                {isTagPopoverOpen && article && (
+                                    <TagPopover 
+                                        article={article} 
+                                        availableUserTags={availableUserTags}
+                                        onClose={() => setIsTagPopoverOpen(false)} 
+                                        onStateChange={onStateChange} 
+                                    />
+                                )}
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    const STAR_TAG = 'user/-/state/com.google/starred';
+                                    const isStarred = article.tags?.includes(STAR_TAG);
+                                    onStateChange(article.id, isStarred ? [] : [STAR_TAG], isStarred ? [STAR_TAG] : []);
+                                }}
+                                className={`p-3 text-white rounded-full shadow-lg transition-all ${
+                                    article.tags?.includes('user/-/state/com.google/starred') ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-800 hover:bg-gray-950'
+                                }`}
+                                aria-label={article.tags?.includes('user/-/state/com.google/starred') ? 'Remove from favorites' : 'Add to favorites'}
+                            >
+                                {article.tags?.includes('user/-/state/com.google/starred') ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                    </svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </>

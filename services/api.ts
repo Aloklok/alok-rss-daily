@@ -88,6 +88,23 @@ export const getTodayInShanghai = (): string => {
     return formatter.format(new Date());
 };
 
+export const getCurrentTimeSlotInShanghai = (): 'morning' | 'afternoon' | 'evening' => {
+    const now = new Date();
+    const hour = parseInt(new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Shanghai'
+    }).format(now), 10);
+
+    if (hour >= 0 && hour < 12) {
+        return 'morning';
+    } else if (hour >= 12 && hour < 19) {
+        return 'afternoon';
+    } else {
+        return 'evening';
+    }
+};
+
 // --- Refactored API Functions ---
 
 export const getAvailableDates = (): Promise<string[]> => {

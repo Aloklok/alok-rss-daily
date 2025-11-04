@@ -73,13 +73,17 @@ export const useFilters = () => {
         return dates.filter(date => date.startsWith(selectedMonth));
     }, [dates, selectedMonth]);
 
-    const handleFilterChange = (filter: Filter) => {
+    const handleFilterChange = (filter: Filter | null) => {
         setActiveFilter(filter);
-        sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(filter));
-        if (filter.type === 'date') {
-            const newMonth = filter.value.substring(0, 7);
-            setSelectedMonth(newMonth);
-            sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(newMonth));
+        if (filter) {
+            sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(filter));
+            if (filter.type === 'date') {
+                const newMonth = filter.value.substring(0, 7);
+                setSelectedMonth(newMonth);
+                sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(newMonth));
+            }
+        } else {
+            sessionStorage.removeItem(CACHE_KEY_ACTIVE_FILTER);
         }
     };
     
