@@ -142,12 +142,23 @@ interface ArticleCardProps {
     availableUserTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
+    showActions?: boolean; // 【新增】控制是否显示操作按钮，默认为 true
 }
 
-const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags, onReaderModeRequest, onStateChange }) => {
+const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags = [], onReaderModeRequest, onStateChange, showActions = true }) => {
     const publishedDate = new Date(article.published).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
     const allKeywords = [...article.keywords];
     const isStarred = useMemo(() => (article.tags || []).includes('user/-/state/com.google/starred'), [article.tags]);
+
+    // 【新增】提取 displayedUserTags 逻辑到 ArticleCard 层面
+    const availableUserTagIds = useMemo(() => new Set(availableUserTags.map(t => t.id)), [availableUserTags]);
+    const displayedUserTags = useMemo(() => {
+        const tagMap = new Map(availableUserTags.map(t => [t.id, t.label]));
+        return (article.tags || [])
+            .filter(tagId => availableUserTagIds.has(tagId))
+            .map(tagId => tagMap.get(tagId))
+            .filter(Boolean) as string[];
+    }, [article.tags, availableUserTagIds, availableUserTags]);
 
     return (
         <article className="py-2 transition-opacity duration-300">
@@ -174,10 +185,16 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags, o
                     {allKeywords && allKeywords.length > 0 && (
                         <div className="flex flex-wrap gap-2 pt-1">
                             {allKeywords.map(tag => (
-                                <span key={tag} className={`text-xs font-semibold inline-block py-1 px-2.5 rounded-full transition-colors ${getRandomColorClass(tag)}`}>
+                                <span key={tag} className={`text-xs font-semibold inline-block py-1 px-2.5 rounded-full ${getRandomColorClass(tag)}`}>
                                     {tag}
                                 </span>
                             ))}
+                        </div>
+                    )}
+                    {/* 【新增】在 ArticleCard 层面显示用户标签 */}
+                    {displayedUserTags.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            {displayedUserTags.map(tagLabel => (tagLabel && <span key={tagLabel} className={`text-xs font-semibold inline-block py-1 px-2.5 rounded-full ${getRandomColorClass(tagLabel)}`}>{tagLabel}</span>))}
                         </div>
                     )}
                 </div>
@@ -190,7 +207,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags, o
                 <Callout title="市场观察" content={article.marketTake} />
             </div>
 
-            <ActionButtons article={article} availableUserTags={availableUserTags} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />
+            {showActions && <ActionButtons article={article} availableUserTags={availableUserTags} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />}
         </article>
     );
 };

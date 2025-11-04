@@ -237,7 +237,7 @@ const onMonthChange = useCallback((month: string) => {
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                 className={`fixed top-5 p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 z-50
-                    ${isReaderVisible ? 'hidden' : ''} 
+                    ${isReaderVisible && !isMdUp ? 'hidden' : ''}
                     ${activeFilter?.type === 'date' && !isMdUp ? 'hidden' : ''}
                     md:left-5 md:transition-all md:duration-300 ${isSidebarCollapsed ? 'md:left-5' : 'md:left-[304px]'}
                     right-5 md:right-auto 
@@ -295,6 +295,7 @@ const onMonthChange = useCallback((month: string) => {
                         onOpenArticle={handleOpenReader}
                         isLoading={isLoading}
                         activeFilter={activeFilter}
+                        availableUserTags={availableFilters.tags}
                     />
                 ) : (
                     <div className="p-8 text-center text-gray-500">选择一个分类或标签查看文章。</div>
