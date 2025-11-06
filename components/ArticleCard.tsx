@@ -3,11 +3,26 @@
 import React, { useState, useMemo, memo } from 'react';
 import { Article, Tag } from '../types';
 import TagPopover from './TagPopover';
-
+import { useArticleMetadata } from '../hooks/useArticleMetadata';
 // ... (Helper functions and Callout component remain unchanged)
+const CALLOUT_THEMES = { '一句话总结': { icon: '📝', color: 'pink' }, '技术洞察': { icon: '🔬', color: 'blue' }, '值得注意': { icon: '⚠️', color: 'brown' }, '市场观察': { icon: '📈', color: 'green' } } as const;
+
+const calloutCardClasses = { 
+    pink: { bg: 'bg-pink-100', title: 'text-pink-950', body: 'text-pink-900', emphasis: 'font-bold text-violet-700' }, 
+    blue: { bg: 'bg-blue-100', title: 'text-blue-950', body: 'text-blue-900', emphasis: 'font-bold text-violet-700' }, 
+    // 【增】新增 brown 主题
+    brown: { 
+        bg: 'bg-orange-100', // 浅橙棕色背景
+        title: 'text-orange-950', // 深橙棕色标题
+        body: 'text-orange-900',   // 较深橙棕色文本
+        emphasis: 'font-bold text-violet-700'
+    }, 
+    green: { bg: 'bg-green-100', title: 'text-green-950', body: 'text-green-900', emphasis: 'font-bold text-violet-700' } 
+};
+
 const parseBold = (text: string, emphasisClass: string = 'font-semibold text-current') => { if (!text) return ''; const parts = text.split(/\*\*(.*?)\*\*/g); return parts.map((part, i) => i % 2 === 1 ? <strong key={i} className={emphasisClass}>{part}</strong> : part); };
-const CALLOUT_THEMES = { '一句话总结': { icon: '📝', color: 'fuchsia' }, '技术洞察': { icon: '🔬', color: 'teal' }, '值得注意': { icon: '⚠️', color: 'amber' }, '市场观察': { icon: '📈', color: 'sky' } } as const;
-const calloutCardClasses = { fuchsia: { bg: 'bg-fuchsia-400/30', title: 'text-fuchsia-950', body: 'text-fuchsia-900', emphasis: 'text-fuchsia-950 font-black bg-fuchsia-200/40 px-1.5 py-0.5 rounded-md' }, teal: { bg: 'bg-teal-400/30', title: 'text-teal-950', body: 'text-teal-900', emphasis: 'text-teal-950 font-black bg-teal-200/40 px-1.5 py-0.5 rounded-md' }, amber: { bg: 'bg-amber-400/30', title: 'text-amber-950', body: 'text-amber-900', emphasis: 'text-amber-950 font-black bg-amber-200/40 px-1.5 py-0.5 rounded-md' }, sky: { bg: 'bg-sky-400/30', title: 'text-sky-950', body: 'text-sky-900', emphasis: 'text-sky-950 font-black bg-sky-200/40 px-1.5 py-0.5 rounded-md' } };
+
+
 const tagColorClasses = [ 'bg-sky-100 text-sky-800', 'bg-emerald-100 text-emerald-800', 'bg-violet-100 text-violet-800', 'bg-rose-100 text-rose-800', 'bg-amber-100 text-amber-800', 'bg-cyan-100 text-cyan-800' ];
 const getRandomColorClass = (key: string) => { let hash = 0; for (let i = 0; i < key.length; i++) { hash = key.charCodeAt(i) + ((hash << 5) - hash); } const index = Math.abs(hash % tagColorClasses.length); return tagColorClasses[index]; };
 interface CalloutProps { title: keyof typeof CALLOUT_THEMES; content: string; }
@@ -21,36 +36,27 @@ interface ActionButtonsProps {
     article: Article;
     availableUserTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
+    // 【改】我们只需要一个 onStateChange 回调
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
-    className?: string; // 允许从外部传入 className
+    className?: string;
 }
 
 const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableUserTags, onReaderModeRequest, onStateChange, className }) => {
     const STAR_TAG = 'user/-/state/com.google/starred';
     const READ_TAG = 'user/-/state/com.google/read';
-    
-    // 1. 【最终修复】状态直接从完整的 article.tags 数组中解析
-    const isStarred = useMemo(() => (article.tags || []).includes(STAR_TAG), [article.tags]);
-    const isRead = useMemo(() => (article.tags || []).includes(READ_TAG), [article.tags]);
-
-    // 2. 【最终修复】显示的用户标签，通过与 availableUserTags 权威列表比对得出
-    const availableUserTagIds = useMemo(() => new Set(availableUserTags.map(t => t.id)), [availableUserTags]);
-    const displayedUserTags = useMemo(() => {
-        const tagMap = new Map(availableUserTags.map(t => [t.id, t.label]));
-        return (article.tags || [])
-            .filter(tagId => availableUserTagIds.has(tagId))
-            .map(tagId => tagMap.get(tagId))
-            .filter(Boolean) as string[];
-    }, [article.tags, availableUserTagIds, availableUserTags]);
-
+    const { isStarred, isRead, userTagLabels: displayedUserTags } = useArticleMetadata(article);
+   
     const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
+    // 【查】这个 isLoading state 被保留，用于提供即时反馈
     const [isLoading, setIsLoading] = useState<'star' | 'read' | null>(null);
 
+    // 【改】handleToggleState 现在可以处理收藏和已读的“切换”
     const handleToggleState = async (action: 'star' | 'read') => {
         setIsLoading(action);
         const tag = action === 'star' ? STAR_TAG : READ_TAG;
         const isActive = action === 'star' ? isStarred : isRead;
         try {
+            // 如果当前是激活状态，则移除标签；否则添加标签
             const tagsToAdd = isActive ? [] : [tag];
             const tagsToRemove = isActive ? [tag] : [];
             await onStateChange(article.id, tagsToAdd, tagsToRemove);
@@ -59,8 +65,10 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableUserTag
         }
     };
 
-    const actionButtonClass = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 transform hover:scale-105 disabled:scale-100 disabled:cursor-wait disabled:opacity-75";
+    const actionButtonClass = "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 transform hover:scale-105 disabled:opacity-75";
+    // 【改】从通用 class 中移除 cursor-wait
     const mobileActionButtonClass = "flex flex-col items-center justify-center h-16 w-16 text-xs font-medium rounded-full p-1 gap-1";
+
 
     return (
         <div className={`relative mt-6 md:mt-8 ${className || ''}`}>
@@ -72,12 +80,22 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableUserTag
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             阅读
                         </button>
-                        <button onClick={() => handleToggleState('star')} disabled={!!isLoading} className={`${actionButtonClass} ${isStarred ? 'bg-amber-400 text-amber-950' : 'bg-amber-200 hover:bg-amber-300 text-amber-900'}`}>
-                            {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
+                        {/* 【改】收藏按钮现在使用独立的 isStarLoading 状态 */}
+                        <button 
+                            onClick={() => handleToggleState('star')} 
+                            disabled={!!isLoading} 
+                            className={`${actionButtonClass} ${isStarred ? 'bg-amber-400 text-amber-950' : 'bg-amber-200 hover:bg-amber-300 text-amber-900'} ${isLoading ? 'cursor-wait' : ''}`}
+                        >
+                           {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
                             {isStarred ? '已收藏' : '收藏'}
                         </button>
-                        <button onClick={() => handleToggleState('read')} disabled={!!isLoading} className={`${actionButtonClass} ${isRead ? 'bg-emerald-400 text-emerald-950 hover:bg-emerald-500' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}>
-                            {isLoading === 'read' ? <SpinnerIcon /> : (isRead ? <IconCheckCircle /> : <IconCircle />)}
+                        {/* 【改】标记已读按钮使用传入的 isMarkingAsRead 状态 */}
+                        <button 
+                            onClick={() => handleToggleState('read')} 
+                            disabled={!!isLoading} 
+                            className={`${actionButtonClass} ${isRead ? 'bg-emerald-400 text-emerald-950 hover:bg-emerald-500' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'} ${isLoading ? 'cursor-wait' : ''}`}
+                        >
+                           {isLoading === 'read' ? <SpinnerIcon /> : (isRead ? <IconCheckCircle /> : <IconCircle />)}
                             {isRead ? '已读' : '标记已读'}
                         </button>
                         <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -107,12 +125,20 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableUserTag
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                         <span className="text-xs sr-only">阅读</span>
                     </button>
-                    <button onClick={() => handleToggleState('star')} disabled={!!isLoading} className={`${mobileActionButtonClass} ${isStarred ? 'text-amber-500' : 'text-gray-600'}`}>
-                        {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
+                    <button 
+                        onClick={() => handleToggleState('star')} 
+                        disabled={!!isLoading} 
+                        className={`${mobileActionButtonClass} ${isStarred ? 'text-amber-500' : 'text-gray-600'} ${isLoading ? 'cursor-wait' : ''}`}
+                    >
+                       {isLoading === 'star' ? <SpinnerIcon /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>}
                         <span className="text-xs sr-only">{isStarred ? '已收藏' : '收藏'}</span>
                     </button>
-                    <button onClick={() => handleToggleState('read')} disabled={!!isLoading} className={`${mobileActionButtonClass} ${isRead ? 'text-emerald-600' : 'text-gray-600'}`}>
-                        {isLoading === 'read' ? <SpinnerIcon /> : (isRead ? <IconCheckCircle /> : <IconCircle />)}
+                    <button 
+                        onClick={() => handleToggleState('read')} 
+                        disabled={!!isLoading} 
+                        className={`${mobileActionButtonClass} ${isRead ? 'text-emerald-600' : 'text-gray-600'} ${isLoading ? 'cursor-wait' : ''}`}
+                    >                       
+                   {isLoading === 'read' ? <SpinnerIcon /> : (isRead ? <IconCheckCircle /> : <IconCircle />)}
                         <span className="text-xs sr-only">{isRead ? '已读' : '标记已读'}</span>
                     </button>
                     <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -129,7 +155,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableUserTag
                 </div>
                 {displayedUserTags.length > 0 && (
                     <div className="flex flex-wrap gap-2 items-center justify-center mt-2 pt-2 border-t border-gray-200">
-                        {displayedUserTags.map(tagLabel => (tagLabel && <span key={tagLabel} className={`text-xs font-semibold inline-block py-1 px-2 rounded-full ${getRandomColorClass(tagLabel)}`}>{tagLabel}</span>))}
+                        {displayedUserTags.map(tagLabel => (tagLabel && <span key={tagLabel} className={`text-xs font-semibold inline-block py-1 px-2.5 rounded-full ${getRandomColorClass(tagLabel)}`}>{tagLabel}</span>))}
                     </div>
                 )}
             </div>
@@ -137,28 +163,21 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({ article, availableUserTag
     );
 };
 
+
 interface ArticleCardProps {
     article: Article;
     availableUserTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
-    showActions?: boolean; // 【新增】控制是否显示操作按钮，默认为 true
+    showActions?: boolean;
+    // 【删】移除不再需要的 onMarkAsRead 和 isMarkingAsRead props
 }
 
 const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags = [], onReaderModeRequest, onStateChange, showActions = true }) => {
+    // 【删】移除所有在 ArticleCard 顶层的元数据计算，因为它们现在都在 ActionButtons 内部的 Hook 中处理
+    const { isStarred, userTagLabels: displayedUserTags } = useArticleMetadata(article);
     const publishedDate = new Date(article.published).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
     const allKeywords = [...article.keywords];
-    const isStarred = useMemo(() => (article.tags || []).includes('user/-/state/com.google/starred'), [article.tags]);
-
-    // 【新增】提取 displayedUserTags 逻辑到 ArticleCard 层面
-    const availableUserTagIds = useMemo(() => new Set(availableUserTags.map(t => t.id)), [availableUserTags]);
-    const displayedUserTags = useMemo(() => {
-        const tagMap = new Map(availableUserTags.map(t => [t.id, t.label]));
-        return (article.tags || [])
-            .filter(tagId => availableUserTagIds.has(tagId))
-            .map(tagId => tagMap.get(tagId))
-            .filter(Boolean) as string[];
-    }, [article.tags, availableUserTagIds, availableUserTags]);
 
     return (
         <article className="py-2 transition-opacity duration-300">
@@ -167,12 +186,15 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags = 
                     {isStarred && <span className="text-amber-400 text-2xl" title="已收藏">⭐️</span>}
                     <span>{article.title}</span>
                 </h3>
-                <div className="space-y-3">
-                    <div className="text-sm text-stone-400 flex items-center flex-wrap gap-x-4">
+                {/* --- 【核心修改】开始重构元数据区域 --- */}
+                <div className="bg-gray-100 p-4 rounded-lg border border-gray-200 space-y-3">
+                    {/* 第一行：来源和日期 */}
+                    <div className="text-sm text-black flex items-center flex-wrap gap-x-4"> {/* 【改】颜色改为 text-black */}
                         <span>{article.sourceName}</span>
                         <span>&bull;</span>
                         <span>发布于 {publishedDate}</span>
                     </div>
+                    {/* 第二行：类型、分类和评分 */}
                     <div className="text-sm text-stone-600 flex items-center flex-wrap">
                         <span className="font-medium mr-2">{article.verdict.type}</span>
                         <span className="mr-2">&bull;</span>
@@ -182,6 +204,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags = 
                             评分: {article.verdict.score}/10
                         </span>
                     </div>
+                    {/* 第三行：只显示关键词 */}
                     {allKeywords && allKeywords.length > 0 && (
                         <div className="flex flex-wrap gap-2 pt-1">
                             {allKeywords.map(tag => (
@@ -189,12 +212,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags = 
                                     {tag}
                                 </span>
                             ))}
-                        </div>
-                    )}
-                    {/* 【新增】在 ArticleCard 层面显示用户标签 */}
-                    {displayedUserTags.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pt-1">
-                            {displayedUserTags.map(tagLabel => (tagLabel && <span key={tagLabel} className={`text-xs font-semibold inline-block py-1 px-2.5 rounded-full ${getRandomColorClass(tagLabel)}`}>{tagLabel}</span>))}
                         </div>
                     )}
                 </div>
@@ -206,7 +223,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags = 
                 <Callout title="值得注意" content={article.critiques} />
                 <Callout title="市场观察" content={article.marketTake} />
             </div>
-
             {showActions && <ActionButtons article={article} availableUserTags={availableUserTags} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />}
         </article>
     );

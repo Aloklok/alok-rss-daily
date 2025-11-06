@@ -3,19 +3,39 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Filter, AvailableFilters } from '../types';
 import { getAvailableDates, getAvailableFilters, getTodayInShanghai } from '../services/api';
+import { useArticleStore } from '../store/articleStore';
+import { useDailyStatusesForMonth, useUpdateDailyStatus } from './useDailyStatus';
 
 const CACHE_KEY_ACTIVE_FILTER = 'cachedActiveFilter';
 const CACHE_KEY_SELECTED_MONTH = 'cachedSelectedMonth';
 
 export const useFilters = () => {
     const [dates, setDates] = useState<string[]>([]);
-    const [activeFilter, setActiveFilter] = useState<Filter | null>(null);
-    const [availableFilters, setAvailableFilters] = useState<AvailableFilters>({ categories: [], tags: [] });
     const [selectedMonth, setSelectedMonth] = useState<string>('');
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     
-    // 1. 【核心修改】新增 isRefreshing 状态
+    const activeFilter = useArticleStore(state => state.activeFilter);
+    const setActiveFilter = useArticleStore(state => state.setActiveFilter);
+    const availableFilters = useArticleStore(state => state.availableFilters);
+    const setAvailableFilters = useArticleStore(state => state.setAvailableFilters);
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+
+
+     // --- 【核心集成】 ---
+    // 1. 【增】使用 useDailyStatusesForMonth Hook 获取状态数据
+    const { data: dailyStatuses, isLoading: isLoadingStatuses } = useDailyStatusesForMonth(selectedMonth);
+
+    // 2. 【增】使用 useUpdateDailyStatus Hook 获取更新函数
+    const { mutate: updateStatus } = useUpdateDailyStatus();
+
+    const handleToggleDailyStatus = useCallback((date: string, currentStatus: boolean) => {
+        // 封装一下，方便 UI 调用
+        updateStatus({ date, isCompleted: !currentStatus });
+    }, [updateStatus]);
+    // --- 结束集成 ---
+
+
 
     useEffect(() => {
         const fetchInitialFilterData = async () => {
@@ -25,7 +45,8 @@ export const useFilters = () => {
                 setActiveFilter(initialFilter);
                 sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(initialFilter));
                 const cachedMonth = sessionStorage.getItem(CACHE_KEY_SELECTED_MONTH);
-                setSelectedMonth(cachedMonth ? JSON.parse(cachedMonth) : today.substring(0, 7));
+               const month = cachedMonth ? JSON.parse(cachedMonth) : today.substring(0, 7);
+                setSelectedMonth(month);
             }
 
             try {
@@ -42,9 +63,8 @@ export const useFilters = () => {
             }
         };
         fetchInitialFilterData();
-    }, []);
+    }, [setAvailableFilters, setActiveFilter]);
 
-    // 2. 【核心修改】重写 refreshFilters 函数
     const refreshFilters = useCallback(async () => {
         setIsRefreshing(true); // 开始刷新
         sessionStorage.removeItem(CACHE_KEY_ACTIVE_FILTER);
@@ -56,12 +76,20 @@ export const useFilters = () => {
             ]);
             setDates(availableDatesNew.sort((a, b) => new Date(b).getTime() - new Date(a).getTime()));
             setAvailableFilters(filtersNew);
+            const today = getTodayInShanghai();
+            if (today) {
+                const resetFilter = { type: 'date' as const, value: today };
+                setActiveFilter(resetFilter);
+                setSelectedMonth(today.substring(0, 7));
+                sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(resetFilter));
+                sessionStorage.setItem(CACHE_KEY_SELECTED_MONTH, JSON.stringify(today.substring(0, 7)));
+            }
         } catch (error) {
             console.error('Failed to refresh sidebar data', error);
         } finally {
             setIsRefreshing(false); // 结束刷新
         }
-    }, []);
+    }, [setActiveFilter, setAvailableFilters]);
 
     const availableMonths = useMemo(() => {
         const monthSet = new Set<string>();
@@ -98,10 +126,9 @@ export const useFilters = () => {
     };
 
     return {
-        isInitialLoad,
-        isRefreshing, // 3. 【核心修改】导出 isRefreshing 状态
+        isInitialLoad: isInitialLoad || isLoadingStatuses,
+        isRefreshing,
         datesForMonth,
-        activeFilter,
         availableFilters,
         selectedMonth,
         setSelectedMonth,
@@ -109,5 +136,7 @@ export const useFilters = () => {
         handleFilterChange,
         handleResetFilter,
         refreshFilters,
+        dailyStatuses: dailyStatuses || {}, // 确保始终返回一个对象
+        handleToggleDailyStatus
     };
 };

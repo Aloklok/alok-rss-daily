@@ -1,8 +1,3 @@
-好的，我们来更新 `README.md`，以准确反映这次“数据加载器”重构带来的架构优化。
-
-这份新文档将在“前端架构”部分引入 `services/articleLoader.ts` 的概念，并更新“关键数据流”，以体现其核心作用。
-
----
 
 # Briefing Hub 项目文档
 
@@ -13,7 +8,7 @@ Briefing Hub 是一个基于 React 和 TypeScript 构建的现代化 RSS 阅读�
 ## 核心特性
 
 - **统一数据视图**：无论是浏览每日简报、分类、标签还是收藏夹，所有文章数据都经过融合处理，确保信息完整一致。
-- **响应式状态管理**：应用状态在所有组件间实时同步，在一个地方收藏文章，侧边栏的收藏列表会立即更新。
+- **响应式状态管理**：应用状态在所有组件间实时同步，在一个地方收藏文章，侧边栏的收藏列表和标签数量会立即更新，无需重新加载。
 - **高性能数据获取**：利用缓存、后台刷新和请求优化，提供流畅、快速的浏览体验。
 - **渐进式 Web 应用 (PWA)**：支持离线访问和快速加载，提供接近原生应用的体验。
 
@@ -32,7 +27,7 @@ Briefing Hub 是一个基于 React 和 TypeScript 构建的现代化 RSS 阅读�
 - **样式**: Tailwind CSS
 - **状态管理**:
   - **服务器状态**: TanStack Query (React Query) - 负责管理所有与后端 API 的交互。
-  - **客户端状态**: Zustand - 充当所有文章数据的“单一数据源”。
+  - **客户端状态**: Zustand - 充当所有文章数据和大部分UI状态的“单一数据源”。
 - **后端 API**: Vercel Serverless Functions
 - **后端服务**:
   - **Supabase**: 提供文章的核心内容和自定义元数据。
@@ -101,13 +96,15 @@ CREATE TABLE public.articles (
 #### 3. `hooks/useArticles.ts` - 服务器状态连接层 (React Query)
 - **职责**: 作为连接“数据加载器”与 React 世界的桥梁。
   - **`use...Query` Hooks**: 调用 `articleLoader.ts` 中对应的 `fetch...` 函数，并将其包装在 `useQuery` 中。它们负责管理缓存、加载状态 (`isLoading`, `isFetching`)，并在数据获取成功后，调用 `articleStore` 的 action 将数据存入全局 Store。
-  - **`use...Mutation` Hooks**: 负责处理所有“写”操作，内置了乐观/非乐观更新、状态回滚和用户反馈逻辑。
+  - **`use...Mutation` Hooks**: 负责处理所有“写”操作。它们调用底层 API 服务，并在 API 调用成功后，触发 `articleStore` 中对应的“智能”更新 action。这确保了UI状态（如收藏列表、标签数量）能够**在客户端即时、高效地更新**，而无需重新获取数据。
 
 #### 4. `store/articleStore.ts` - 客户端状态中心 (Zustand)
-- **职责**: 应用的**“单一事实来源”**。它存储了所有经过融合的、完整的文章数据 (`articlesById`) 和重要的 UI 索引（如 `starredArticleIds`），确保所有组件都能访问到一致的、最新的状态。
+- **职责**: 应用的**“单一事实来源”**与**客户端业务逻辑中心**。
+  - **统一状态存储**: 它存储了所有经过融合的、完整的文章数据 (`articlesById`)，以及关键的 UI 状态（如 `activeFilter`、`selectedArticleId`、`isReaderVisible`）和元数据（如 `availableFilters`）。
+  - **智能状态更新**: Store 内的 Actions (如 `updateArticle`) 封装了核心的客户端业务逻辑。例如，当一篇文章状态被更新时，该 action 不仅会更新这篇文章本身，还会**自动同步更新** `starredArticleIds` 列表，并**动态计算**受影响标签的 `count` 数量。这保证了所有派生状态的一致性，并避免了不必要的 API 调用。
 
 #### 5. `App.tsx` 与 UI 组件 - 消费与渲染层
-- **职责**: `App.tsx` 负责确定初始数据加载的上下文（例如，通过调用 `getCurrentTimeSlotInShanghai` 设置初始时间槽），然后从 `use...Articles` Hooks 触发数据获取，并从 `articleStore` 订阅数据。最后，它使用 `useMemo` 将 Store 中的数据重构成适合 UI 展示的格式（如 `reports`），并传递给下层的纯展示组件（如 `Briefing`, `ArticleList`）。
+- **职责**: `App.tsx` 现在主要负责应用的整体布局和顶层协调。它从 `articleStore` 订阅必要的全局状态（如 `activeFilter`、`selectedArticleId`），并根据这些状态决定渲染哪个主视图组件（如 `Briefing`、`ArticleList` 或 `ArticleDetail`）。各个子组件（如 `Sidebar`, `ReaderView`）**直接从 `articleStore` 订阅它们所需的数据和 actions**。例如，`Sidebar` 不再需要通过 props 接收回调，而是直接调用 store 的 `setSelectedArticleId` action。这种模式最大限度地减少了 props-drilling，实现了组件间的彻底解耦和高效渲染。
 
 ## 后端 API (Vercel Serverless Functions)
 

@@ -1,4 +1,4 @@
-import { Article, BriefingReport, Tag, CleanArticleContent, AvailableFilters, Filter } from '../types';
+import { Article, BriefingReport, Tag, CleanArticleContent, AvailableFilters, Filter, GroupedArticles } from '../types';
 
 
 
@@ -238,4 +238,20 @@ export const getTags = async (): Promise<Tag[]> => {
         console.error('Failed to fetch tags', error);
         return [];
     }
+};
+
+
+// 【增】获取每日简报完成状态
+export const getDailyStatuses = (startDate: string, endDate: string): Promise<Record<string, boolean>> => {
+    return apiService.request<Record<string, boolean>>('/api/get-daily-statuses', {
+        params: { start_date: startDate, end_date: endDate },
+    }).catch(() => ({})); // 出错时返回空对象
+};
+
+// 【增】更新每日简报完成状态
+export const updateDailyStatus = (date: string, isCompleted: boolean): Promise<{ success: boolean }> => {
+    return apiService.request<{ success: boolean }>('/api/update-daily-status', {
+        method: 'POST',
+        body: { date: date, is_completed: isCompleted },
+    });
 };

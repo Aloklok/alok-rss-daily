@@ -3,6 +3,39 @@
 import React, { memo,useState  } from 'react';
 import { Article, Filter, AvailableFilters } from '../types';
 import { useSidebar, ActiveTab } from '../hooks/useSidebar';
+import { useArticleStore } from '../store/articleStore';
+
+
+
+const StatusIcon: React.FC<{ completed: boolean; onClick: (e: React.MouseEvent) => void }> = ({ completed, onClick }) => {
+    const handleClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onClick(e);
+    };
+
+    // 基础样式，用于尺寸和对齐
+    const baseClasses = "h-5 w-5 cursor-pointer transition-all duration-200 ease-in-out transform group-hover:scale-110";
+
+    if (completed) {
+        // 已完成状态：绿色的实心圆圈背景和白色的对勾
+        return (
+            <div onClick={handleClick} className="relative">
+                <svg className={`${baseClasses} text-green-500`} fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+            </div>
+        );
+    }
+
+    // 未完成状态：灰色的空心圆圈
+    return (
+        <div onClick={handleClick} className="relative">
+            <svg className={`${baseClasses} text-gray-300 group-hover:text-gray-400`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+            </svg>
+        </div>
+    );
+};
 
 interface SidebarProps {
     isInitialLoading: boolean; // 初始加载状态
@@ -10,13 +43,11 @@ interface SidebarProps {
     availableMonths: string[];
     selectedMonth: string;
     onMonthChange: (month: string) => void;
-    availableFilters: AvailableFilters;
-    activeFilter: Filter | null;
-    activeArticleId?: string | number; // 新增 prop
-    onFilterChange: (filter: Filter | null) => void;
     onOpenArticle?: (article: Article) => void;
     onRefresh?: () => Promise<void>;
     datesForMonth: string[];
+    dailyStatuses: Record<string, boolean>;
+    onToggleDailyStatus: (date: string, currentStatus: boolean) => void;
 }
 
 const formatMonthForDisplay = (month: string) => {
@@ -26,20 +57,27 @@ const formatMonthForDisplay = (month: string) => {
     return date.toLocaleString('zh-CN', { year: 'numeric', month: 'long' });
 };
 
-const Sidebar = React.memo<SidebarProps>(({
+
+// 【增】定义一个新的组件，用于渲染状态图标
+
+
+
+const Sidebar = React.memo<SidebarProps>(({ 
     isInitialLoading,
     isRefreshingFilters,
     availableMonths,
     selectedMonth,
     onMonthChange,
     availableFilters,
-    activeFilter,
-    activeArticleId,
-    onFilterChange,
-    onOpenArticle,
     onRefresh,
     datesForMonth,
+    dailyStatuses, // 【增】
+    onToggleDailyStatus, // 【增】
 }) => {
+    const activeFilter = useArticleStore(state => state.activeFilter);
+    const setActiveFilter = useArticleStore(state => state.setActiveFilter);
+    const selectedArticleId = useArticleStore(state => state.selectedArticleId);
+    const setSelectedArticleId = useArticleStore(state => state.setSelectedArticleId);
     const {
         activeTab,
         setActiveTab,
@@ -58,7 +96,7 @@ const Sidebar = React.memo<SidebarProps>(({
     const isLoading = isInitialLoading || isRefreshingFilters || isLoadingStarred;
 
     const isFilterActive = (type: Filter['type'], value: string) => {
-        return activeFilter?.type === type && activeFilter?.value === value;
+        return !selectedArticleId && activeFilter?.type === type && activeFilter?.value === value;
     };
 
     const handleRefreshClick = async () => {
@@ -75,7 +113,6 @@ const Sidebar = React.memo<SidebarProps>(({
 
 
 
-// --- 将这一整段 renderFiltersTab 函数替换掉 ---
 const renderFiltersTab = () => (
     <div className="space-y-1">
         {/* 我的收藏 */}
@@ -100,7 +137,8 @@ const renderFiltersTab = () => (
                             <div className="px-3 py-2 text-sm text-gray-500">暂无收藏</div>
                         ) : (
                             starredArticles.map(article => (
-                                <button key={article.id} onClick={() => onOpenArticle ? onOpenArticle(article) : onFilterChange({ type: 'starred', value: 'true' })} className={listItemButtonClass(activeArticleId === article.id)}>
+                                <button key={article.id} onClick={() => setSelectedArticleId(article.id)} 
+                                className={listItemButtonClass(selectedArticleId === article.id)}>
                                     <span className="truncate">{article.title}</span>
                                 </button>
                             ))
@@ -125,7 +163,7 @@ const renderFiltersTab = () => (
                         .map(category => (
                         <button
                             key={category.id}
-                            onClick={() => onFilterChange({ type: 'category', value: category.id })}
+                            onClick={() => setActiveFilter({ type: 'category', value: category.id })}
                             className={listItemButtonClass(isFilterActive('category', category.id))}
                         >
                             <span className="flex-1 truncate">{category.label}</span>
@@ -152,7 +190,7 @@ const renderFiltersTab = () => (
                  {availableFilters.tags.map(tag => (
                     <button
                         key={tag.id}
-                        onClick={() => onFilterChange({ type: 'tag', value: tag.id })}
+                        onClick={() => setActiveFilter({ type: 'tag', value: tag.id })}
                         className={`w-full text-left px-2 py-1.5 rounded-md transition-colors duration-200 flex items-center justify-between text-sm ${
                             isFilterActive('tag', tag.id) 
                             ? 'bg-gray-800 text-white font-semibold' 
@@ -181,13 +219,36 @@ const renderFiltersTab = () => (
               <nav className="flex flex-col gap-1.5 flex-grow">
                 {datesForMonth.map(date => {
                     const isActive = isFilterActive('date', date);
-                    const dateObj = new Date(date);
+                    // 【增】获取当前日期的完成状态
+                    const isCompleted = dailyStatuses[date] || false;
+                    const dateObj = new Date(date + 'T00:00:00'); // 确保解析为本地时区
                     const displayDatePart = dateObj.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
                     const displayDayOfWeekPart = dateObj.toLocaleDateString('zh-CN', { weekday: 'short' });
                     return (
-                      <button key={date} onClick={() => onFilterChange({ type: 'date', value: date })} className={`w-full text-left px-3 py-2 rounded-lg transition-colors duration-200 flex justify-between items-center ${ isActive ? 'bg-gray-800 text-white font-semibold' : 'text-gray-600 hover:bg-gray-100' }`}>
-                        <span>{displayDatePart}</span>
-                        <span className="text-xs">{displayDayOfWeekPart}</span>
+                        <button 
+                        key={date} 
+                        onClick={() => setActiveFilter({ type: 'date', value: date })} 
+                        // 【改】应用新的样式
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 flex justify-between items-center group
+                            ${isActive 
+                                ? 'bg-gray-800 text-white font-semibold' 
+                                : isCompleted
+                                    ? 'bg-gray-50 text-gray-500 hover:bg-gray-100' // 【改】完成状态的样式
+                                    : 'text-gray-700 hover:bg-gray-100' // 【改】默认状态的样式
+                            }`
+                        }
+                      >
+                        <div className="flex items-center gap-3">
+                            {/* 【增】渲染状态图标 */}
+                            <StatusIcon 
+                                completed={isCompleted} 
+                                onClick={() => onToggleDailyStatus(date, isCompleted)} 
+                            />
+                            <span>{displayDatePart}</span>
+                        </div>
+                        <span className={`text-xs ${isCompleted && !isActive ? 'text-gray-400' : ''} ${isActive ? 'text-white' : 'group-hover:text-gray-600'}`}>
+                            {displayDayOfWeekPart}
+                        </span>
                       </button>
                     );
                 })}

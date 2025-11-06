@@ -3,12 +3,12 @@
 import React, { memo, useMemo } from 'react';
 import { Article, Filter, Tag } from '../types';
 import { useArticleStore } from '../store/articleStore';
+import { useArticleMetadata } from '../hooks/useArticleMetadata';
 
 interface ArticleListProps {
   articleIds: (string | number)[];
   onOpenArticle: (article: Article) => void;
   isLoading: boolean;
-  activeFilter: Filter | null;
   availableUserTags: Tag[];
 }
 
@@ -21,8 +21,9 @@ const GRADIENTS = [
 const tagColorClasses = [ 'bg-sky-100 text-sky-800', 'bg-emerald-100 text-emerald-800', 'bg-violet-100 text-violet-800', 'bg-rose-100 text-rose-800', 'bg-amber-100 text-amber-800', 'bg-cyan-100 text-cyan-800' ];
 const getRandomColorClass = (key: string) => { let hash = 0; for (let i = 0; i < key.length; i++) { hash = key.charCodeAt(i) + ((hash << 5) - hash); } const index = Math.abs(hash % tagColorClasses.length); return tagColorClasses[index]; };
 
-const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, isLoading, activeFilter, availableUserTags }) => {
+const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, isLoading, availableUserTags }) => {
   const articlesById = useArticleStore((state) => state.articlesById);
+  const activeFilter = useArticleStore((state) => state.activeFilter);
   const articles = articleIds.map(id => articlesById[id]).filter(Boolean) as Article[];
 
   const randomGradient = useMemo(() => {
@@ -30,6 +31,29 @@ const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, is
     const hash = activeFilter.value.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
     return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
   }, [activeFilter]);
+
+  const ArticleListItem: React.FC<{ article: Article; onOpenArticle: (article: Article) => void }> = ({ article, onOpenArticle }) => {
+    const { isStarred, userTagLabels: displayedUserTags } = useArticleMetadata(article);
+
+    return (
+        <div
+          className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
+          onClick={() => onOpenArticle(article)}
+        >
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-x-2">
+            {isStarred && <span className="text-amber-400 text-xl" title="已收藏">⭐️</span>}
+            <span>{article.title}</span>
+          </h3>
+          <p className="text-sm text-gray-600">来源: {article.sourceName}</p>
+          <p className="text-xs text-gray-500">发布日期: {new Date(article.published).toLocaleDateString()}</p>
+          {displayedUserTags.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {displayedUserTags.map(tagLabel => (tagLabel && <span key={tagLabel} className={`text-xs font-semibold inline-block py-1 px-2.5 rounded-full ${getRandomColorClass(tagLabel)}`}>{tagLabel}</span>))}
+            </div>
+          )}
+        </div>
+    );
+};
 
   const filterLabel = useMemo(() => {
     if (!activeFilter) return '文章';
@@ -62,37 +86,9 @@ const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, is
         </h1>
       </header>
       <div className="space-y-0.5">
-        {articles.map((article) => {
-          const isStarred = useMemo(() => (article.tags || []).includes('user/-/state/com.google/starred'), [article.tags]);
-          const availableUserTagIds = useMemo(() => new Set(availableUserTags.map(t => t.id)), [availableUserTags]);
-          const displayedUserTags = useMemo(() => {
-              const tagMap = new Map(availableUserTags.map(t => [t.id, t.label]));
-              return (article.tags || [])
-                  .filter(tagId => availableUserTagIds.has(tagId))
-                  .map(tagId => tagMap.get(tagId))
-                  .filter(Boolean) as string[];
-          }, [article.tags, availableUserTagIds, availableUserTags]);
-
-          return (
-            <div
-              key={article.id}
-              className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
-              onClick={() => onOpenArticle(article)}
-            >
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-x-2">
-                {isStarred && <span className="text-amber-400 text-xl" title="已收藏">⭐️</span>}
-                <span>{article.title}</span>
-              </h3>
-              <p className="text-sm text-gray-600">来源: {article.sourceName}</p>
-              <p className="text-xs text-gray-500">发布日期: {new Date(article.published).toLocaleDateString()}</p>
-              {displayedUserTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {displayedUserTags.map(tagLabel => (tagLabel && <span key={tagLabel} className={`text-xs font-semibold inline-block py-1 px-2.5 rounded-full ${getRandomColorClass(tagLabel)}`}>{tagLabel}</span>))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {articles.map((article) => (
+            <ArticleListItem key={article.id} article={article} onOpenArticle={onOpenArticle} />
+        ))}
       </div>
     </div>
   );

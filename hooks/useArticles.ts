@@ -55,10 +55,6 @@ export const useStarredArticles = () => {
 
 // --- Mutation Hooks ---
 
-// hooks/useArticles.ts
-
-// ... (其他 Hooks 保持不变)
-
 // 4. 更新文章状态 (标签、收藏、已读) - 非乐观更新版本
 export const useUpdateArticleState = () => {
     const queryClient = useQueryClient();
@@ -67,7 +63,7 @@ export const useUpdateArticleState = () => {
 
     return useMutation({
         mutationFn: async ({ articleId, tagsToAdd, tagsToRemove }: { articleId: string | number, tagsToAdd: string[], tagsToRemove: string[] }) => {
-            // 1. 【核心修改】API 调用现在是 mutationFn 的一部分
+            // 【查】这段逻辑现在可以完美处理收藏和已读的切换
             const stateTagsToAdd = tagsToAdd.filter(t => t.startsWith('user/-/state'));
             const stateTagsToRemove = tagsToRemove.filter(t => t.startsWith('user/-/state'));
             for (const tag of stateTagsToAdd) {
@@ -78,13 +74,14 @@ export const useUpdateArticleState = () => {
                 if (tag.includes('starred')) await editArticleState(articleId, 'star', false);
                 if (tag.includes('read')) await editArticleState(articleId, 'read', false);
             }
+            
             const userTagsToAdd = tagsToAdd.filter(t => !t.startsWith('user/-/state'));
             const userTagsToRemove = tagsToRemove.filter(t => !t.startsWith('user/-/state'));
             if (userTagsToAdd.length > 0 || userTagsToRemove.length > 0) {
                 await editArticleTag(articleId, userTagsToAdd, userTagsToRemove);
             }
 
-            // 2. 【核心修改】在 API 成功后，计算并返回最新的文章对象
+            // API 成功后，计算并返回最新的文章对象
             const articleToUpdate = articlesById[articleId];
             if (!articleToUpdate) throw new Error("Article not found in store");
 
@@ -93,23 +90,11 @@ export const useUpdateArticleState = () => {
             tagsToRemove.forEach(tag => finalTagsSet.delete(tag));
             return { ...articleToUpdate, tags: Array.from(finalTagsSet) };
         },
-        
-        // 3. 【核心修改】移除 onMutate，因为我们不再进行乐观更新
-        
-        // 4. 【核心修改】在 onSuccess 中更新 Store
         onSuccess: (updatedArticle) => {
-            // updatedArticle 是从 mutationFn 返回的最新文章对象
             updateArticle(updatedArticle);
         },
-
-        onError: (err, variables, context) => {
-            // onError 现在只负责报告错误，不再需要回滚
+        onError: (err) => {
             console.error("Failed to update article state:", err);
-        },
-        
-        onSettled: () => {
-            // onSettled 仍然可以用来让其他查询失效
-            queryClient.invalidateQueries({ queryKey: ['starred'] });
         },
     });
 };
@@ -122,21 +107,24 @@ export const useMarkAllAsRead = () => {
 
     return useMutation({
         mutationFn: apiMarkAllAsRead,
-        onMutate: async (articleIds) => {
-            await queryClient.cancelQueries();
-            const originalArticles = articleIds.map(id => articlesById[id]).filter(Boolean);
-            if(originalArticles.length === 0) return { originalArticles: [] };
-            
-            const updatedArticles = originalArticles.map(article => {
-                if (article.tags?.includes('user/-/state/com.google/read')) return article;
-                return { ...article, tags: [...(article.tags || []), 'user/-/state/com.google/read'] };
-            });
+        onSuccess: (markedIds) => {
+            // markedIds 是从 apiMarkAllAsRead 成功返回的 ID 列表
+            if (!markedIds || markedIds.length === 0) return;
 
-            updatedArticles.forEach(updateArticle);
-            return { originalArticles };
+            const READ_TAG = 'user/-/state/com.google/read';
+            markedIds.forEach(id => {
+                const articleToUpdate = articlesById[id];
+                // 确保文章存在且尚未被标记为已读
+                if (articleToUpdate && !articleToUpdate.tags?.includes(READ_TAG)) {
+                    updateArticle({
+                        ...articleToUpdate,
+                        tags: [...(articleToUpdate.tags || []), READ_TAG],
+                    });
+                }
+            });
         },
         onError: (err, variables, context) => {
-            context?.originalArticles?.forEach(updateArticle);
+            console.error("Failed to mark as read:", err);
         },
     });
 };

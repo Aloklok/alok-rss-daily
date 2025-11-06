@@ -1,16 +1,16 @@
 // App.tsx
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import FloatingActionButtons from './components/FloatingActionButtons'; // 【增】导入新组件
 import Sidebar from './components/Sidebar';
 import Briefing from './components/Briefing';
 import ReaderView from './components/ReaderView';
 import ArticleDetail from './components/ArticleDetail';
 import ArticleList from './components/ArticleList';
-import TagPopover from './components/TagPopover';
 import LoadingSpinner from './components/LoadingSpinner';
 import Toast from './components/Toast';
-import { Article, Tag, BriefingReport, GroupedArticles } from './types';
-import { useArticleStore } from './store/articleStore';
+import { Article, Tag, BriefingReport, GroupedArticles, Filter } from './types';
+import { useArticleStore, selectSelectedArticle } from './store/articleStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFilters } from './hooks/useFilters';
 import { useReader } from './hooks/useReader';
@@ -21,14 +21,17 @@ import {
     useUpdateArticleState,
     useMarkAllAsRead
 } from './hooks/useArticles';
+import { useArticleMetadata } from './hooks/useArticleMetadata'; // 【增】导入 Hook
 
 const App: React.FC = () => {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
     const [isMdUp, setIsMdUp] = useState<boolean>(false);
     const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' | 'info' }>({ isVisible: false, message: '', type: 'info' });
-    const [isMarkingSuccess, setIsMarkingSuccess] = useState(false);
     const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(() => getCurrentTimeSlotInShanghai());
     const queryClient = useQueryClient();
+
+
+
 
     const articlesById = useArticleStore((state) => state.articlesById);
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -40,7 +43,6 @@ const App: React.FC = () => {
         isInitialLoad,
         isRefreshing: isRefreshingFilters,
         datesForMonth,
-        activeFilter,
         availableFilters,
         selectedMonth,
         setSelectedMonth,
@@ -48,7 +50,11 @@ const App: React.FC = () => {
         handleFilterChange,
         handleResetFilter,
         refreshFilters,
+        dailyStatuses, // 【增】
+        handleToggleDailyStatus, // 【增】
     } = useFilters();
+
+    const activeFilter = useArticleStore(state => state.activeFilter);
 
     const { data: briefingArticleIds, isLoading: isBriefingLoading, isFetching: isBriefingFetching } = useBriefingArticles(
     activeFilter?.type === 'date' ? activeFilter.value : null,
@@ -60,6 +66,35 @@ const App: React.FC = () => {
     );
 
     const filteredArticleIds = filteredArticleIdsFromQuery || [];
+
+
+    // 【核心逻辑】计算当前视图中未读文章的 ID 列表
+    const unreadArticleIdsInView = useMemo(() => {
+        const READ_TAG = 'user/-/state/com.google/read';
+        let articleIdsToCheck: (string | number)[] = [];
+
+        // 根据当前激活的过滤器确定要检查的文章范围
+        if (activeFilter?.type === 'date') {
+            articleIdsToCheck = briefingArticleIds || [];
+        } else if (activeFilter?.type === 'category' || activeFilter?.type === 'tag') {
+            articleIdsToCheck = filteredArticleIds || [];
+        }
+
+        // 筛选出其中未读的文章
+        return articleIdsToCheck
+            .map(id => articlesById[id])
+            .filter(article => article && !article.tags?.includes(READ_TAG))
+            .map(article => article.id);
+    }, [activeFilter, briefingArticleIds, filteredArticleIds, articlesById]);
+
+    const handleMarkAllClick = () => {
+        // 【改】现在我们只标记当前视图中未读的文章
+        if (unreadArticleIdsInView.length > 0) {
+            markAllAsRead(unreadArticleIdsInView);
+        } else {
+            showToast('没有需要标记的文章', 'info');
+        }
+    };
 
     const reports: BriefingReport[] = useMemo(() => {
         if (!briefingArticleIds || briefingArticleIds.length === 0) return [];
@@ -80,14 +115,17 @@ const App: React.FC = () => {
     const { 
         readerContent,
         isReaderLoading,
-        isReaderVisible,
-        sidebarArticle,
         articleForReader,
         handleOpenReader,
         handleShowArticleInMain,
         handleCloseReader,
         handleCloseArticleDetail,
     } = useReader();
+
+    const sidebarArticle = useArticleStore(selectSelectedArticle);
+    const isReaderVisible = useArticleStore(state => state.isReaderVisible);
+
+    const mainContentArticleId = sidebarArticle?.id; // 用于主内容区判断是否显示 ArticleDetail
 
     const { mutateAsync: updateArticleState, isPending: isUpdatingArticle } = useUpdateArticleState();
   const [isRefreshingHome, setIsRefreshingHome] = useState(false);
@@ -111,50 +149,14 @@ const App: React.FC = () => {
     });
 };
 
-const handleMarkAllClick = () => {
-    let idsToMark: (string | number)[] = [];
-    if (sidebarArticle) {
-        idsToMark = [sidebarArticle.id];
-    } else if (activeFilter?.type === 'date') {
-        idsToMark = briefingArticleIds || [];
-    } else if (activeFilter?.type === 'category' || activeFilter?.type === 'tag') {
-        idsToMark = filteredArticleIds || [];
-    }
-
-    if (idsToMark.length > 0) {
-        // 在调用 mutate 之前，先清除可能残留的成功状态
-        setIsMarkingSuccess(false); 
-        
-        markAllAsRead(idsToMark, {
-            onSuccess: (markedIds) => {
-                if (markedIds && markedIds.length > 0) {
-                    // API 成功后，立即设置成功状态
-                    setIsMarkingSuccess(true);
-                    // 2秒后自动恢复正常状态
-                    setTimeout(() => setIsMarkingSuccess(false), 2000);
-                }
-            },
-            onError: () => {
-                // 失败时，确保成功状态被清除
-                setIsMarkingSuccess(false);
-            }
-        });
-    } else {
-        showToast('没有文章需要标记', 'info');
-    }
-};
 
 const onFilterChange = useCallback((filter: Filter) => {
-    handleFilterChange(filter);
+    // handleFilterChange(filter); // 移除此行
     handleCloseArticleDetail();
     if (!isMdUp) setIsSidebarCollapsed(true);
-}, [handleFilterChange, handleCloseArticleDetail, isMdUp]);
+}, [handleCloseArticleDetail, isMdUp]);
 
-const onOpenArticle = useCallback((article: Article) => {
-    handleShowArticleInMain(article);
-    handleFilterChange(null);
-    if (!isMdUp) setIsSidebarCollapsed(true);
-}, [handleShowArticleInMain, handleFilterChange, isMdUp]);
+
 
 const onMonthChange = useCallback((month: string) => {
     setSelectedMonth(month);
@@ -172,7 +174,6 @@ const onMonthChange = useCallback((month: string) => {
     await queryClient.invalidateQueries({ queryKey: ['briefing'] });
     
     // 4. 调用 useFilters 提供的重置函数，这会更新 activeFilter
-    //    并自动触发 useBriefingArticles 重新运行
     handleResetFilter();
 
     // 5. 滚动到页面顶部
@@ -192,7 +193,6 @@ const onMonthChange = useCallback((month: string) => {
     }, []);
 
     const mainContentRef = useRef<HTMLDivElement | null>(null);
-    const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
     
     const isLoading = isInitialLoad || isBriefingLoading || isFilterLoading || isBriefingFetching;
 
@@ -225,15 +225,16 @@ const onMonthChange = useCallback((month: string) => {
                     selectedMonth={selectedMonth}
                     onMonthChange={onMonthChange}
                     availableFilters={availableFilters}
-                    activeFilter={activeFilter}
-                    activeArticleId={sidebarArticle?.id}
-                    onFilterChange={onFilterChange}
-                    onOpenArticle={onOpenArticle}
+                    onOpenArticle={handleShowArticleInMain}
                     onRefresh={refreshFilters}
                     datesForMonth={datesForMonth}
+                    dailyStatuses={dailyStatuses}
+                    onToggleDailyStatus={handleToggleDailyStatus}
                 />
             </div>
 
+
+            {/* ... (侧边栏展开/折叠按钮) ... */}
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                 className={`fixed top-5 p-2 bg-white rounded-full shadow-lg hover:shadow-xl duration-300 ease-in-out border border-gray-200 hover:border-gray-300 z-50
@@ -250,7 +251,7 @@ const onMonthChange = useCallback((month: string) => {
                 )}
             </button>
 
-            {/* Global Sidebar Toggle for Mobile (in-content) */}
+            {/*   ... (侧边栏展开/折叠按钮) ...  for Mobile (in-content) */}
             <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                 className={`md:hidden fixed top-5 right-5 z-10 p-2 rounded-full transition-all duration-300 ease-in-out
@@ -265,7 +266,7 @@ const onMonthChange = useCallback((month: string) => {
                 )}
             </button>
 
-            <div ref={mainContentRef} className={`flex-1 bg-stone-50 w-full max-w-4xl mx-auto px-2 md:px-8 ${!isSidebarCollapsed && isMdUp ? 'md:ml-80' : ''}`}>
+            <div ref={mainContentRef} className={`flex-1 bg-stone-50 w-full max-w-3xl mx-auto px-2 md:px-8 ${!isSidebarCollapsed && isMdUp ? 'md:ml-80' : ''}`}>
                 {isLoading ? (
                     <LoadingSpinner />
                 ) : sidebarArticle ? (
@@ -277,14 +278,12 @@ const onMonthChange = useCallback((month: string) => {
                 ) : activeFilter?.type === 'date' ? (
                     <Briefing 
                         reports={reports} 
-                        activeFilter={activeFilter}
                         timeSlot={timeSlot}
                         selectedReportId={reports[0]?.id || null}
                         availableUserTags={availableFilters.tags}
                         onReportSelect={() => {}}
                         onReaderModeRequest={handleOpenReader}
                         onStateChange={handleArticleStateChange}
-                        onResetFilter={handleResetFilter}
                         onTimeSlotChange={setTimeSlot}
                         isSidebarCollapsed={isSidebarCollapsed}
                         onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -294,94 +293,34 @@ const onMonthChange = useCallback((month: string) => {
                         articleIds={filteredArticleIds}
                         onOpenArticle={handleOpenReader}
                         isLoading={isLoading}
-                        activeFilter={activeFilter}
                         availableUserTags={availableFilters.tags}
                     />
                 ) : (
                     <div className="p-8 text-center text-gray-500">选择一个分类或标签查看文章。</div>
                 )}
                 
-                <div className="fixed bottom-8 right-8 z-20 flex flex-col-reverse items-center gap-y-3">
-                    {/* 【新增】手动刷新按钮 */}
-                          <button 
-                                onClick={handleRefreshToHome}
-                                disabled={isBriefingFetching}
-                                className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all"
-                                aria-label="Back to today's briefing"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                                </svg>
-                            </button>
-                    {sidebarArticle && (
-                        <div className="relative" onClick={(e) => e.stopPropagation()}>
-                            <button onClick={() => setIsTagPopoverOpen(prev => !prev)} className="p-3 bg-sky-600 text-white rounded-full shadow-lg hover:bg-sky-700 transition-all" aria-label="Tag article">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
-                            </button>
-                            {isTagPopoverOpen && sidebarArticle && (
-                                <TagPopover 
-                                    article={sidebarArticle} 
-                                    availableUserTags={availableFilters.tags}
-                                    onClose={() => setIsTagPopoverOpen(false)} 
-                                    onStateChange={handleArticleStateChange} 
-                                />
-                            )}
-                        </div>
-                    )}
-                    {sidebarArticle ? (
-                        <button
-                            onClick={() => {
-                                const STAR_TAG = 'user/-/state/com.google/starred';
-                                const isStarred = sidebarArticle.tags?.includes(STAR_TAG);
-                                handleArticleStateChange(sidebarArticle.id, isStarred ? [] : [STAR_TAG], isStarred ? [STAR_TAG] : []);
-                            }}
-                            disabled={isUpdatingArticle}
-                            className={`p-3 text-white rounded-full shadow-lg transition-all disabled:bg-gray-500 ${
-                                sidebarArticle.tags?.includes('user/-/state/com.google/starred') ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-800 hover:bg-gray-950'
-                            }`}
-                            aria-label={sidebarArticle.tags?.includes('user/-/state/com.google/starred') ? 'Remove from favorites' : 'Add to favorites'}
-                        >
-                            {sidebarArticle.tags?.includes('user/-/state/com.google/starred') ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                </svg>
-                            ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                </svg>
-                            )}
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={handleMarkAllClick}
-                            disabled={isMarkingAsRead || isUpdatingArticle} 
-                            className={`p-3 text-white rounded-full shadow-lg transition-all disabled:bg-gray-500 ${
-                                isMarkingSuccess ? 'bg-green-500' : 'bg-gray-800 hover:bg-gray-950'
-                            }`} 
-                            aria-label="Mark all as read"
-                        >
-                            {isMarkingAsRead ? (
-                                    <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                )}
-                        </button>
-                    )}
-                    <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="p-3 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-950 transition-all" aria-label="Back to top">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-                    </button>
-                </div>
+                {/* 【增】浮动按钮 FloatingActionButtons 组件 */}
+            <FloatingActionButtons
+                selectedArticle={sidebarArticle}
+                isBriefingFetching={isBriefingFetching}
+                isUpdatingArticle={isUpdatingArticle}
+                isMarkingAsRead={isMarkingAsRead}
+                availableUserTags={availableFilters.tags}
+                hasUnreadInView={unreadArticleIdsInView.length > 0}
+                onArticleStateChange={handleArticleStateChange}
+                onMarkAllClick={handleMarkAllClick}
+                onRefreshToHome={handleRefreshToHome}
+            />
 
                 <ReaderView 
                     isVisible={isReaderVisible}
                     isLoading={isReaderLoading}
                     content={readerContent}
                     onClose={handleCloseReader}
-                    article={articleForReader}
                     availableUserTags={availableFilters.tags}
                     onStateChange={handleArticleStateChange}
                     onGoHome={handleRefreshToHome}
+                    article={articleForReader}
                 />
                 <Toast 
                     message={toast.message} 

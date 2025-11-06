@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState,useRef } from 'react';
 import { CleanArticleContent, Article, Tag } from '../types';
 import TagPopover from './TagPopover'; // 【新增】导入 TagPopover
 
@@ -13,38 +13,53 @@ interface ReaderViewProps {
     isVisible: boolean;
     isLoading: boolean;
     content: CleanArticleContent | null;
+    article: Article | null;
     onClose: () => void;
-    article: Article | null; // 新增：当前文章对象
     availableUserTags: Tag[]; // 新增：可用的用户标签
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => void; // 新增：状态变更回调
     onGoHome: () => void; // 新增：返回首页回调
 }
 
-const ReaderView: React.FC<ReaderViewProps> = ({ 
-    isVisible, 
-    isLoading, 
-    content, 
-    onClose,
+const ReaderView: React.FC<ReaderViewProps> = ({
+    isVisible,
+    isLoading,
+    content,
     article,
+    onClose,
     availableUserTags,
     onStateChange,
     onGoHome
 }) => {
-    
     const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false); // 【新增】管理 TagPopover 状态
-
+    const contentRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 onClose();
             }
+            // 【增】拦截 Cmd/Ctrl + A
+            if ((event.metaKey || event.ctrlKey) && event.key === 'a') {
+                if (contentRef.current) {
+                    event.preventDefault(); // 阻止浏览器默认的全选行为
+                    const range = document.createRange();
+                    range.selectNodeContents(contentRef.current);
+                    const selection = window.getSelection();
+                    if (selection) {
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                    }
+                }
+            }
         };
-        document.addEventListener('keydown', handleKeyDown);
+        if (isVisible) {
+            document.addEventListener('keydown', handleKeyDown);
+        }
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [onClose]);
+    }, [isVisible, onClose]); 
     
+
     useEffect(() => {
         if (isVisible) {
             document.body.style.overflow = 'hidden';
@@ -98,11 +113,11 @@ const ReaderView: React.FC<ReaderViewProps> = ({
                         {isLoading ? (
                            <LoadingSpinner />
                         ) : content ? (
-                            <article className="p-6 md:p-8">
+                            <article className="p-6 md:p-8 select-none">
                                 <h1 className="text-2xl md:text-3xl font-bold font-serif text-gray-900 mb-2">{content.title}</h1>
                                 <p className="text-gray-500 mb-6 border-b pb-4">来源: {content.source}</p>
-                                <div 
-                                    className="prose prose-lg max-w-none text-gray-800 leading-relaxed"
+                                <div ref={contentRef}
+                                    className="prose prose-lg max-w-none text-gray-800 leading-relaxed select-text"
                                     dangerouslySetInnerHTML={{ __html: content.content }} 
                                 />
                             </article>
