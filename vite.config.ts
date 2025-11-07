@@ -8,16 +8,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // 1. 基本配置
-      registerType: 'autoUpdate', // 自动更新 Service Worker
-      injectRegister: 'auto', // 自动注入注册脚本
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
 
-      // 2. 缓存策略 (Workbox)
       workbox: {
-        // 动态缓存所有构建出的静态资源 (JS, CSS, fonts, etc.)
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg}'],
-        
-        // Stale-While-Revalidate 策略用于 API 请求
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
@@ -25,14 +20,16 @@ export default defineConfig({
             options: {
               cacheName: 'api-cache',
               cacheableResponse: {
-                statuses: [200], // 只缓存成功的 GET 请求
+                statuses: [200],
               },
             },
           },
         ],
       },
 
-      // 3. Manifest 配置
+      // --- 【核心修改】 ---
+      // 移除手写的 manifest.icons，改用 includeAssets 和 manifest.icons 自动生成
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
         short_name: 'Briefing Hub',
         name: 'Personal RSS Briefing Hub',
@@ -40,13 +37,17 @@ export default defineConfig({
         display: 'standalone',
         theme_color: '#f9fafb',
         background_color: '#ffffff',
+        // 【改】插件会自动根据下面的 icons 配置和 public 目录中的源文件生成 manifest 图标
         icons: [
-            {
-          "src": "/1.jpg",
-          "type": "image/jpeg",
-          "sizes": "442x433"
-        }
-        ],
+          {
+            // 告诉插件你的源图标是什么
+            src: '/computer_cat.jpg', // 确保 public/1.jpg 存在且至少 512x512
+            // 告诉插件你需要生成哪些尺寸
+            sizes: [64, 96, 128, 192, 256, 512],
+            // 告诉插件文件类型
+            type: 'image/jpeg',
+          }
+        ]
       },
     }),
   ],
