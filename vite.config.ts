@@ -43,13 +43,13 @@ export default defineConfig({
             src: 'computer_cat.jpeg', // 【重要】确保这个文件在 public 目录下
             sizes: '192x192',
             type: 'image/jpeg',
-            purpose: 'any'
+            purpose: 'any maskable'
           },
           {
             src: 'computer_cat.jpeg', // 【重要】确保这个文件在 public 目录下
             sizes: '512x512',
             type: 'image/jpeg',
-            purpose: 'any'
+            purpose: 'any maskable'
           }
         ]
       },
