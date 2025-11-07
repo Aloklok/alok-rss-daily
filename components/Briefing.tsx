@@ -10,6 +10,7 @@ interface ReportContentProps {
     availableUserTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
+    articleCount: number;
 }
 
 const ReportContent: React.FC<ReportContentProps> = ({ report, availableUserTags, onReaderModeRequest, onStateChange }) => {
@@ -125,7 +126,7 @@ const GRADIENTS = [
     'from-lime-400 via-emerald-500 to-cyan-500'
 ];
 
-const Briefing: React.FC<BriefingProps> = ({ reports, timeSlot, selectedReportId, availableUserTags, onReportSelect, onReaderModeRequest, onStateChange, onTimeSlotChange, isSidebarCollapsed, onToggleSidebar }) => {
+const Briefing: React.FC<BriefingProps> = ({ reports, timeSlot, selectedReportId, availableUserTags, onReportSelect, onReaderModeRequest, onStateChange, onTimeSlotChange, isSidebarCollapsed, onToggleSidebar,articleCount }) => {
   const activeFilter = useArticleStore(state => state.activeFilter);
   const selectedReport = reports.find(r => r.id === selectedReportId);
 
@@ -192,10 +193,17 @@ const Briefing: React.FC<BriefingProps> = ({ reports, timeSlot, selectedReportId
                                 )}
                             </div>
                         </div>
-                        {isToday && (
+                        {isToday ? (
                             <p className="mt-4 md:mt-6 text-lg md:text-xl font-serif font-bold tracking-tight text-white/95">
-                                {getGreeting()}，欢迎阅读今日简报。
+                                {getGreeting()}，欢迎阅读今日简报
+                                {articleCount > 0 && `，共 ${articleCount} 篇文章。`}
                             </p>
+                        ) : (
+                            articleCount > 0 && (
+                                <p className="mt-4 md:mt-6 text-lg md:text-xl font-serif font-bold tracking-tight text-white/95">
+                                    欢迎阅读本期简报，共 {articleCount} 篇文章。
+                                </p>
+                            )
                         )}
                     </div>
                     {activeFilter?.type === 'date' && (

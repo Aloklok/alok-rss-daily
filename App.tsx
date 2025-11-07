@@ -287,6 +287,7 @@ const onMonthChange = useCallback((month: string) => {
                         onTimeSlotChange={setTimeSlot}
                         isSidebarCollapsed={isSidebarCollapsed}
                         onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                        articleCount={briefingArticleIds?.length || 0}
                     />
                 ) : (activeFilter?.type === 'category' || activeFilter?.type === 'tag') ? (
                     <ArticleList
