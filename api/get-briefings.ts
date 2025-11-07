@@ -37,17 +37,26 @@ async function getBriefings(req: VercelRequest, res: VercelResponse) {
     const supabase = getSupabaseClient();
     let query = supabase.from('articles').select('*');
 
-    const startDate = new Date(`${date}T00:00:00.000+08:00`);
-    const endDate = new Date(`${date}T23:59:59.999+08:00`);
+    // --- 【核心修复】开始：使用对时区不敏感的字符串构造 ---
+    let startDate: Date;
+    let endDate: Date;
 
     if (slot === 'morning') {
-        endDate.setHours(11, 59, 59, 999);
+        startDate = new Date(`${date}T00:00:00.000+08:00`);
+        endDate = new Date(`${date}T11:59:59.999+08:00`);
     } else if (slot === 'afternoon') {
-        startDate.setHours(12, 0, 0, 0);
-        endDate.setHours(18, 59, 59, 999);
+        startDate = new Date(`${date}T12:00:00.000+08:00`);
+        endDate = new Date(`${date}T18:59:59.999+08:00`);
     } else if (slot === 'evening') {
-        startDate.setHours(19, 0, 0, 0);
+        startDate = new Date(`${date}T19:00:00.000+08:00`);
+        endDate = new Date(`${date}T23:59:59.999+08:00`);
+    } else {
+        // 默认情况，获取全天
+        startDate = new Date(`${date}T00:00:00.000+08:00`);
+        endDate = new Date(`${date}T23:59:59.999+08:00`);
     }
+    // --- 核心修复结束 ---
+
 
     query = query.gte('n8n_processing_date', startDate.toISOString());
     query = query.lte('n8n_processing_date', endDate.toISOString());
