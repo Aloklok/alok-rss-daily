@@ -40,7 +40,7 @@ export default defineConfig({
         background_color: '#ffffff',
         icons: [
           {
-            src: 'computer_cat.jpeg', // 【重要】确保这个文件在 public 目录下
+            src: 'computer_cat_180.jpeg', // 【重要】确保这个文件在 public 目录下
             sizes: '180x180',
             type: 'image/jpeg',
             purpose: 'any'
