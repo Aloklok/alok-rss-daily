@@ -2,13 +2,37 @@
 
 // @ts-ignore Vercel 会在边缘环境中自动提供全局类型
 export default function middleware(request: Request) {
+
+    const url = new URL(request.url);
+
+    // --- 【核心修复】开始：添加白名单 ---
+    // 定义我们不希望被保护的公共路径或文件扩展名
+    const publicPaths = [
+        // PWA 相关文件
+        '/manifest.webmanifest',
+        '/sw.js',
+        '/registerSW.js',
+        // 静态资源（图标、字体等）
+        '.ico',
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.svg',
+    ];
+
+    // 如果请求的路径是白名单中的一项，或者以白名单中的扩展名结尾，则直接放行
+    if (publicPaths.some(path => url.pathname.endsWith(path))) {
+        return; // 继续处理请求，不进行认证检查
+    }
+    // --- 核心修复结束 ---
+
+
   const accessToken = process.env.ACCESS_TOKEN;
 
   if (!accessToken) {
       return new Response('Access token is not configured.', { status: 500 });
   }
 
-  const url = new URL(request.url);
   const urlToken = url.searchParams.get('token');
 
   if (urlToken === accessToken) {
@@ -58,12 +82,10 @@ export default function middleware(request: Request) {
       }
   );
 }
-
+// 【改】放宽 matcher，让 middleware 检查更多请求
+// 我们现在依赖函数内部的白名单来放行，而不是依赖 matcher
 export const config = {
-  matcher: [
-      /*
-       * 匹配除了 Vercel 系统路径和静态文件之外的所有请求路径
-       */
-      '/((?!api/|_next/|_static/|_vercel/|favicon.ico|sw.js).*)',
-  ],
+    matcher: [
+      '/((?!api/|_vercel/).*)',
+    ],
 };
