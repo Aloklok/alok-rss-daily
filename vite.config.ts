@@ -41,6 +41,12 @@ export default defineConfig({
         icons: [
           {
             src: 'computer_cat.jpeg', // 【重要】确保这个文件在 public 目录下
+            sizes: '180x180',
+            type: 'image/jpeg',
+            purpose: 'any'
+          },
+          {
+            src: 'computer_cat.jpeg', // 【重要】确保这个文件在 public 目录下
             sizes: '192x192',
             type: 'image/jpeg',
             purpose: 'any maskable'
@@ -52,11 +58,7 @@ export default defineConfig({
             purpose: 'any maskable'
           }
         ],
-        // 关键：从一张大图自动生成所有推荐图标（含 apple-touch-icon）
-  pwaAssets: {
-    image: 'public/computer_cat.jpeg', // 至少 512x512，正方形
-    preset: 'minimal-2023'
-  },
+        
       },
 
     }),
