@@ -51,7 +51,12 @@ export default defineConfig({
             type: 'image/jpeg',
             purpose: 'any maskable'
           }
-        ]
+        ],
+        // 关键：从一张大图自动生成所有推荐图标（含 apple-touch-icon）
+  pwaAssets: {
+    image: 'public/computer_cat.jpeg', // 至少 512x512，正方形
+    preset: 'minimal-2023'
+  },
       },
 
     }),
