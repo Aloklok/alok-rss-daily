@@ -14,9 +14,13 @@ import { useArticleStore } from '../store/articleStore';
 export const useBriefingArticles = (date: string | null, slot: string | null) => {
     const addArticles = useArticleStore(state => state.addArticles);
     return useQuery({
-        queryKey: ['briefing', date, slot],
+        // 【核心修复 #2】
+        // 当 slot 为 null 时，我们给它一个明确的字符串 'all'。
+        // 这可以确保 react-query 将 ['briefing', date, null] 和 ['briefing', date, 'all'] 视为两个不同的缓存条目。
+        queryKey: ['briefing', date, slot || 'all'],
         queryFn: async () => {
             if (!date) return [];
+            // queryFn 接收的仍然是原始的 slot (可以是 null)
             const completeArticles = await fetchBriefingArticles(date, slot);
             addArticles(completeArticles);
             return completeArticles.map(a => a.id);

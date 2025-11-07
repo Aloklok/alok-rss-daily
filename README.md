@@ -1,4 +1,3 @@
-
 # Briefing Hub 项目文档
 
 ## 项目概述
@@ -9,11 +8,14 @@ Briefing Hub 是一个基于 React 和 TypeScript 构建的现代化 RSS 阅读�
 
 - **统一数据视图**：无论是浏览每日简报、分类、标签还是收藏夹，所有文章数据都经过融合处理，确保信息完整一致。
 - **响应式状态管理**：应用状态在所有组件间实时同步，在一个地方收藏文章，侧边栏的收藏列表和标签数量会立即更新，无需重新加载。
-- **高性能数据获取**：利用缓存、后台刷新和请求优化，提供流畅、快速的浏览体验。
+- **高性能数据获取**：利用缓存、后台刷新和原子化状态更新，消除不必要的 API 调用和组件渲染，提供流畅、快速的浏览体验。
 - **渐进式 Web 应用 (PWA)**：支持离线访问和快速加载，提供接近原生应用的体验。
+- **工作流集成**：支持以天为单位标记简报的完成状态，帮助用户追踪阅读进度。
+- **安全访问控制**：通过 Vercel Edge Middleware 实现无密码认证，确保项目私密性的同时提供无缝的访问体验。
 
 ## 用户界面 (UI) 交互
 
+- **每日进度标记**：在日历视图中，每个日期前都有一个状态图标，用户可以点击将其标记为“已完成”，以便追踪每日简报的阅读进度。
 - **全局侧边栏切换**：在移动设备上，侧边栏可以通过屏幕顶部的按钮进行展开和折叠。在桌面视图中，侧边栏始终可见，但其宽度可根据折叠状态调整。当进入文章阅读模式时，此按钮会自动隐藏，以提供沉浸式阅读体验。
 - **文章列表增强**：在分类/标签的文章列表中，每篇文章现在会直观地显示其收藏状态（通过星形图标）和所有关联的用户标签，提供更丰富的信息概览。
 - **阅读模式浮动操作**：当文章在阅读模式下打开时，右下角会显示一组浮动按钮，提供便捷操作：
@@ -28,6 +30,7 @@ Briefing Hub 是一个基于 React 和 TypeScript 构建的现代化 RSS 阅读�
 - **状态管理**:
   - **服务器状态**: TanStack Query (React Query) - 负责管理所有与后端 API 的交互。
   - **客户端状态**: Zustand - 充当所有文章数据和大部分UI状态的“单一数据源”。
+- **边缘计算**: Vercel Edge Middleware - 用于在网络边缘层实现安全访问控制。
 - **后端 API**: Vercel Serverless Functions
 - **后端服务**:
   - **Supabase**: 提供文章的核心内容和自定义元数据。
@@ -95,13 +98,16 @@ CREATE TABLE public.articles (
 
 #### 3. `hooks/useArticles.ts` - 服务器状态连接层 (React Query)
 - **职责**: 作为连接“数据加载器”与 React 世界的桥梁。
-  - **`use...Query` Hooks**: 调用 `articleLoader.ts` 中对应的 `fetch...` 函数，并将其包装在 `useQuery` 中。它们负责管理缓存、加载状态 (`isLoading`, `isFetching`)，并在数据获取成功后，调用 `articleStore` 的 action 将数据存入全局 Store。
-  - **`use...Mutation` Hooks**: 负责处理所有“写”操作。它们调用底层 API 服务，并在 API 调用成功后，触发 `articleStore` 中对应的“智能”更新 action。这确保了UI状态（如收藏列表、标签数量）能够**在客户端即时、高效地更新**，而无需重新获取数据。
+- **`use...Query` Hooks**: 调用 `articleLoader.ts` 中的函数，通过 `react-query` 管理缓存、加载状态，并将成功获取的数据存入 Zustand Store。
+- **`use...Mutation` Hooks**: 负责处理所有“写”操作（如更新文章状态、标记每日进度），并内置了乐观更新/非乐观更新、状态回滚和用户反馈逻辑。
+- **`useFilters.ts`**: 作为核心业务逻辑 Hook，它负责计算和触发 `activeFilter` 和 `timeSlot` 的原子化更新，确保数据请求的准确性并消除冗余调用。
 
 #### 4. `store/articleStore.ts` - 客户端状态中心 (Zustand)
 - **职责**: 应用的**“单一事实来源”**与**客户端业务逻辑中心**。
-  - **统一状态存储**: 它存储了所有经过融合的、完整的文章数据 (`articlesById`)，以及关键的 UI 状态（如 `activeFilter`、`selectedArticleId`、`isReaderVisible`）和元数据（如 `availableFilters`）。
+  - **统一状态存储**: 它存储了所有经过融合的、完整的文章数据 (`articlesById`)，以及关键的 UI 状态（如 `activeFilter`、`timeSlot`
+  `selectedArticleId`、`isReaderVisible`）和元数据（如 `availableFilters`）。
   - **智能状态更新**: Store 内的 Actions (如 `updateArticle`) 封装了核心的客户端业务逻辑。例如，当一篇文章状态被更新时，该 action 不仅会更新这篇文章本身，还会**自动同步更新** `starredArticleIds` 列表，并**动态计算**受影响标签的 `count` 数量。这保证了所有派生状态的一致性，并避免了不必要的 API 调用。
+
 
 #### 5. `App.tsx` 与 UI 组件 - 消费与渲染层
 - **职责**: `App.tsx` 现在主要负责应用的整体布局和顶层协调。它从 `articleStore` 订阅必要的全局状态（如 `activeFilter`、`selectedArticleId`），并根据这些状态决定渲染哪个主视图组件（如 `Briefing`、`ArticleList` 或 `ArticleDetail`）。各个子组件（如 `Sidebar`, `ReaderView`）**直接从 `articleStore` 订阅它们所需的数据和 actions**。例如，`Sidebar` 不再需要通过 props 接收回调，而是直接调用 store 的 `setSelectedArticleId` action。这种模式最大限度地减少了 props-drilling，实现了组件间的彻底解耦和高效渲染。
@@ -118,6 +124,8 @@ CREATE TABLE public.articles (
 - **`api/update-state.ts`**: 通用的文章状态更新接口，处理所有“写”操作。
 - **`api/articles.ts`**: 获取单篇文章的“干净”内容，用于阅读器模式。
 - **`api/get-available-dates.ts`**: 获取有文章的可用日期列表。
+- **`api/get-daily-statuses.ts`**: 【新增】批量获取每日简报的完成状态。
+- **`api/update-daily-status.ts`**: 【新增】更新某一天的简报完成状态。
 
 ## 环境变量
 - `VITE_SUPABASE_URL` - Supabase 项目 URL (用于前端客户端)
@@ -126,6 +134,7 @@ CREATE TABLE public.articles (
 - `SUPABASE_SERVICE_ROLE_KEY` - Supabase 服务角色密钥 (用于 Vercel Serverless Functions 后端)
 - `FRESHRSS_API_URL` - FreshRSS API 基础 URL (用于 Vercel Serverless Functions 后端)
 - `FRESHRSS_AUTH_TOKEN` - FreshRSS 认证令牌 (用于 Vercel Serverless Functions 后端)
+- `ACCESS_TOKEN` - 【新增】用于 Middleware 访问控制的秘密令牌。
 
 ## 开发命令
 
@@ -136,8 +145,10 @@ CREATE TABLE public.articles (
 - `npm run lint` - 运行 ESLint 检查
 
 
-## 部署
-部署流程保持不变，推荐部署在 Vercel 平台。
+## 安全与部署
+
+- **访问控制**: 项目根目录下的 `middleware.ts` 文件通过 Vercel Edge Middleware 实现。它使用环境变量中存储的秘密令牌，通过“秘密 URL”和 Cookie 的方式实现无密码认证，保护整个网站不被公开访问。
+- 部署流程保持不变，推荐部署在 Vercel 平台。
 - `npm install -g vercel`
 - `vercel login`
 - `vercel link`

@@ -27,11 +27,16 @@ const App: React.FC = () => {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
     const [isMdUp, setIsMdUp] = useState<boolean>(false);
     const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' | 'info' }>({ isVisible: false, message: '', type: 'info' });
-    const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening' | null>(() => getCurrentTimeSlotInShanghai());
     const queryClient = useQueryClient();
 
+    // 只有当 activeFilter 是今天的日期时，我们才在 state 初始化时设置时间槽。
+    // 对于历史日期，它应该默认为 null (全天)。
+    const activeFilter = useArticleStore(state => state.activeFilter);
+    const timeSlot = useArticleStore(state => state.timeSlot);
+    const setTimeSlot = useArticleStore(state => state.setTimeSlot);
 
 
+    
 
     const articlesById = useArticleStore((state) => state.articlesById);
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -54,7 +59,6 @@ const App: React.FC = () => {
         handleToggleDailyStatus, // 【增】
     } = useFilters();
 
-    const activeFilter = useArticleStore(state => state.activeFilter);
 
     const { data: briefingArticleIds, isLoading: isBriefingLoading, isFetching: isBriefingFetching } = useBriefingArticles(
     activeFilter?.type === 'date' ? activeFilter.value : null,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Filter, AvailableFilters } from '../types';
-import { getAvailableDates, getAvailableFilters, getTodayInShanghai } from '../services/api';
+import { getAvailableDates, getAvailableFilters, getTodayInShanghai} from '../services/api';
 import { useArticleStore } from '../store/articleStore';
 import { useDailyStatusesForMonth, useUpdateDailyStatus } from './useDailyStatus';
 
@@ -37,15 +37,18 @@ export const useFilters = () => {
 
 
 
-    useEffect(() => {
+     // 在 useEffect 中，我们只负责设置 filter，不再需要自己计算 timeSlot
+     useEffect(() => {
         const fetchInitialFilterData = async () => {
             const today = getTodayInShanghai();
             if (today) {
                 const initialFilter = { type: 'date' as const, value: today };
+                // 【改】直接调用简单的 setActiveFilter，它会自动处理 timeSlot
                 setActiveFilter(initialFilter);
+                
                 sessionStorage.setItem(CACHE_KEY_ACTIVE_FILTER, JSON.stringify(initialFilter));
                 const cachedMonth = sessionStorage.getItem(CACHE_KEY_SELECTED_MONTH);
-               const month = cachedMonth ? JSON.parse(cachedMonth) : today.substring(0, 7);
+                const month = cachedMonth ? JSON.parse(cachedMonth) : today.substring(0, 7);
                 setSelectedMonth(month);
             }
 
