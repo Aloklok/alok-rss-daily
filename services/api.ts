@@ -107,6 +107,14 @@ export const getCurrentTimeSlotInShanghai = (): 'morning' | 'afternoon' | 'eveni
 
 // --- Refactored API Functions ---
 
+// 【增】为 getArticlesByLabel 创建一个语义化的别名
+export const getRawStarredArticles = (): Promise<Article[]> => {
+    // 复用 getArticlesByLabel，传入固定的 "starred" 标签 ID
+    return getArticlesByLabel({ type: 'starred', value: 'user/-/state/com.google/starred' });
+};
+
+
+
 export const getAvailableDates = (): Promise<string[]> => {
     return apiService.request<string[]>('/api/get-available-dates').catch(() => []);
 };

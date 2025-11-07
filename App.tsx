@@ -14,7 +14,7 @@ import { useArticleStore, selectSelectedArticle } from './store/articleStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFilters } from './hooks/useFilters';
 import { useReader } from './hooks/useReader';
-import { getTodayInShanghai, getCurrentTimeSlotInShanghai } from './services/api';
+import { getTodayInShanghai, getCurrentTimeSlotInShanghai,getCleanArticleContent } from './services/api';
 import { 
     useBriefingArticles, 
     useFilteredArticles, 
@@ -35,14 +35,41 @@ const App: React.FC = () => {
     const timeSlot = useArticleStore(state => state.timeSlot);
     const setTimeSlot = useArticleStore(state => state.setTimeSlot);
 
-
-    
-
     const articlesById = useArticleStore((state) => state.articlesById);
+    const setSelectedArticleId = useArticleStore(state => state.setSelectedArticleId);
+    const addArticles = useArticleStore(state => state.addArticles);
+
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setToast({ isVisible: true, message, type });
         setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
     }, []);
+
+
+
+    // 【核心修复】创建 handleOpenArticle 回调，并从 useReader 中分离出来
+    const handleOpenArticle = useCallback(async (articleHeader: Article) => {
+        // 1. 立即设置选中 ID，让 App 开始准备渲染 ArticleDetail
+        setSelectedArticleId(articleHeader.id);
+
+        // 2. 将侧边栏提供的基本信息（头部）先存入 store，
+        //    这样 ArticleDetail 可以立即显示标题等信息，而不是一片空白。
+        addArticles([articleHeader]);
+
+        // 3. 异步获取完整的、干净的文章内容 (来自 FreshRSS)
+        //    注意：我们不再需要获取 Supabase 的数据，因为用户只是想阅读。
+        const fullContent = await getCleanArticleContent(articleHeader);
+        
+        // 4. 将获取到的干净内容合并到 store 中已有的文章对象上
+        //    我们用 summary 字段来存储干净的 HTML 内容
+        const articleWithFullContent = { 
+            ...articleHeader, 
+            summary: fullContent.content, 
+            // 也可以更新标题，以防原文标题更准确
+            title: fullContent.title 
+        };
+        addArticles([articleWithFullContent]);
+
+    }, [addArticles, setSelectedArticleId]);
 
     const { 
         isInitialLoad,
@@ -140,11 +167,7 @@ const App: React.FC = () => {
     // 【核心修改】现在 mutateAsync 会在 API 成功后才 resolve
     return updateArticleState({ articleId, tagsToAdd, tagsToRemove }, {
         onSuccess: (updatedArticle) => {
-            // updatedArticle 是从 mutationFn 成功返回的数据
-            // 我们用它来更新局部的 sidebarArticle 状态
-            if (updatedArticle && sidebarArticle && sidebarArticle.id === updatedArticle.id) {
-                handleShowArticleInMain(updatedArticle);
-            }
+            // mutation hook 已经处理好了一切。
         },
         onError: (error) => {
             // 可以在这里显示一个错误 Toast
@@ -229,7 +252,7 @@ const onMonthChange = useCallback((month: string) => {
                     selectedMonth={selectedMonth}
                     onMonthChange={onMonthChange}
                     availableFilters={availableFilters}
-                    onOpenArticle={handleShowArticleInMain}
+                    onOpenArticle={handleOpenArticle}
                     onRefresh={refreshFilters}
                     datesForMonth={datesForMonth}
                     dailyStatuses={dailyStatuses}

@@ -4,9 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
     fetchBriefingArticles, 
     fetchFilteredArticles, 
-    fetchStarredArticles 
+    fetchStarredArticleHeaders 
 } from '../services/articleLoader'; // 1. 【核心修改】从新的加载器导入
-import { editArticleTag, editArticleState, markAllAsRead as apiMarkAllAsRead } from '../services/api';
+import { getRawStarredArticles,editArticleTag, editArticleState, markAllAsRead as apiMarkAllAsRead } from '../services/api';
 import { useArticleStore } from '../store/articleStore';
 
 // --- Query Hooks (现在变得非常简洁) ---
@@ -44,15 +44,18 @@ export const useFilteredArticles = (filterValue: string | null) => {
 };
 
 export const useStarredArticles = () => {
-    const addArticles = useArticleStore(state => state.addArticles);
     const setStarredArticleIds = useArticleStore(state => state.setStarredArticleIds);
     return useQuery({
-        queryKey: ['starred'],
+        queryKey: ['starredHeaders'],
         queryFn: async () => {
-            const mergedArticles = await fetchStarredArticles();
-            addArticles(mergedArticles);
-            setStarredArticleIds(mergedArticles.map(a => a.id));
-            return mergedArticles.map(a => a.id);
+             // 【改】直接调用最底层的 API 函数，获取 FreshRSS 的原始数据
+            const freshArticles = await getRawStarredArticles();
+            
+            // 我们只更新 starredArticleIds 列表
+            setStarredArticleIds(freshArticles.map(a => a.id));
+            
+            // 返回头部信息给 useSidebar Hook
+            return freshArticles.map(a => ({ id: a.id, title: a.title, link: a.link, sourceName: a.sourceName, published: a.published, tags: a.tags }));
         },
     });
 };
@@ -99,6 +102,11 @@ export const useUpdateArticleState = () => {
         },
         onError: (err) => {
             console.error("Failed to update article state:", err);
+        },
+        onSettled: () => {
+            // 告诉 react-query，所有与“收藏”相关的查询数据都可能已经过时了。
+            // 下一次 useStarredArticles Hook 渲染时，它会自动重新获取最新的头部信息。
+            queryClient.invalidateQueries({ queryKey: ['starredHeaders'] });
         },
     });
 };

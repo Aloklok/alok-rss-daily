@@ -2,6 +2,7 @@
 
 import { 
     getBriefingReportsByDate, 
+    getRawStarredArticles, // 【增】导入新的 API 函数
     getArticlesByLabel, 
     getStarredArticles, 
     getArticlesDetails,
@@ -52,4 +53,15 @@ export async function fetchFilteredArticles(filterValue: string): Promise<Articl
 export async function fetchStarredArticles(): Promise<Article[]> {
     const freshArticles = await getStarredArticles();
     return mergeWithSupabaseDetails(freshArticles);
+}
+
+
+// 【增】4. 加载收藏文章的“头部信息”（仅 ID 和标题，供侧边栏初始化使用）
+export async function fetchStarredArticleHeaders(): Promise<{ id: string | number; title: string }[]> {
+    const freshArticles = await getRawStarredArticles();
+    // 只返回侧边栏需要的最少信息，不进行任何 Supabase 合并
+    return freshArticles.map(article => ({
+        id: article.id,
+        title: article.title,
+    }));
 }

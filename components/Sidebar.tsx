@@ -73,6 +73,7 @@ const Sidebar = React.memo<SidebarProps>(({
     datesForMonth,
     dailyStatuses, // 【增】
     onToggleDailyStatus, // 【增】
+    onOpenArticle
 }) => {
     const activeFilter = useArticleStore(state => state.activeFilter);
     const setActiveFilter = useArticleStore(state => state.setActiveFilter);
@@ -137,7 +138,7 @@ const renderFiltersTab = () => (
                             <div className="px-3 py-2 text-sm text-gray-500">暂无收藏</div>
                         ) : (
                             starredArticles.map(article => (
-                                <button key={article.id} onClick={() => setSelectedArticleId(article.id)} 
+                                <button key={article.id} onClick={() => onOpenArticle(article as Article)}
                                 className={listItemButtonClass(selectedArticleId === article.id)}>
                                     <span className="truncate">{article.title}</span>
                                 </button>

@@ -11,7 +11,7 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 10, // 10 minutes
       cacheTime: 1000 * 60 * 30, // 30 minutes
       retry: 1,
     },
