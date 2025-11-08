@@ -11,7 +11,14 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 10, // 10 minutes
+      // --- 【核心修改】开始 ---
+      // 默认情况下，refetchOnWindowFocus 是 true
+      refetchOnWindowFocus: false, // 禁用窗口重新聚焦时的自动刷新
+      refetchOnReconnect: false,   // (可选，但推荐) 禁用网络重新连接时的自动刷新
+      refetchOnMount: true,      // (保持) 组件挂载时仍然获取数据
+      // --- 核心修改结束 ---
+
+      staleTime: 1000 * 60 * 20, // 5 minutes
       cacheTime: 1000 * 60 * 30, // 30 minutes
       retry: 1,
     },
