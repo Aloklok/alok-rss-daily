@@ -293,7 +293,8 @@ const onMonthChange = useCallback((month: string) => {
                 )}
             </button>
 
-            <div ref={mainContentRef} className={`flex-1 bg-stone-50 w-full max-w-3xl mx-auto px-2 md:px-8 ${!isSidebarCollapsed && isMdUp ? 'md:ml-80' : ''}`}>
+            <div ref={mainContentRef} className={`flex-1 bg-neutral-50 bg-paper-texture ${!isSidebarCollapsed && isMdUp ? 'md:ml-80' : ''}`}>
+            <div className="w-full max-w-3xl mx-auto px-2 md:px-8">
                 {isLoading ? (
                     <LoadingSpinner />
                 ) : sidebarArticle ? (
@@ -357,6 +358,7 @@ const onMonthChange = useCallback((month: string) => {
                     type={toast.type}
                 />
             </div>
+        </div>
         </div>
     );
 };

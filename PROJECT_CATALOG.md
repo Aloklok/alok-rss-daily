@@ -1,5 +1,3 @@
-# Briefing Hub 项目目录结构
-
 ## 项目根目录
 - `App.tsx` - 主应用组件
 - `README.md` - 项目文档

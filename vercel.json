@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/((?!api/|@vite|@react-refresh|.*\\.tsx$|.*\\.ts$|.*\\.css$|src/|node_modules/|sw.js|manifest.json|robots.txt|_vercel|vite.svg).*)",
-      "destination": "/index.html"
+      "source": "/index.html",
+      "destination": "/"
     }
   ]
 }

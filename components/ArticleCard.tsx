@@ -182,7 +182,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags = 
     return (
         <article className="py-2 transition-opacity duration-300">
             <header className="mb-8">
-                <h3 className="text-3xl lg:text-4xl font-bold font-serif text-stone-900 mb-6 leading-tight flex items-center gap-x-3">
+                <h3 className="text-2xl lg:text-2xl font-bold font-serif text-stone-900 mb-6 leading-tight flex items-center gap-x-3">
                     {isStarred && <span className="text-amber-400 text-2xl" title="已收藏">⭐️</span>}
                     <span>{article.title}</span>
                 </h3>
