@@ -8,10 +8,11 @@ import {
 } from '../services/articleLoader'; // 1. 【核心修改】从新的加载器导入
 import { getRawStarredArticles,editArticleTag, editArticleState, markAllAsRead as apiMarkAllAsRead } from '../services/api';
 import { useArticleStore } from '../store/articleStore';
-
+import { getTodayInShanghai } from '../services/api';
 // --- Query Hooks (现在变得非常简洁) ---
 
 export const useBriefingArticles = (date: string | null, slot: string | null) => {
+    const today = getTodayInShanghai();
     const addArticles = useArticleStore(state => state.addArticles);
     return useQuery({
         // 【核心修复 #2】
@@ -26,6 +27,19 @@ export const useBriefingArticles = (date: string | null, slot: string | null) =>
             return completeArticles.map(a => a.id);
         },
         enabled: !!date,
+        // --- 【核心优化】 ---
+        // 动态设置 staleTime
+        staleTime: (() => {
+            // 如果查询的日期是今天，我们使用一个较短的 staleTime (例如 5 分钟)，
+            // 因为今天的数据是会变化的。
+            if (date === today) {
+                return 1000 * 60 * 5; // 5 minutes
+            }
+            // 如果查询的是历史日期，我们告诉 react-query 这个数据是“永不过期”的。
+            // Infinity 意味着只要缓存存在，就永远不要认为它是 stale 的，
+            // 也就永远不会自动去 refetch。
+            return Infinity;
+        })(),
     });
 };
 
