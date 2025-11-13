@@ -5,6 +5,7 @@ import { Article, CleanArticleContent, Tag } from '../types'; // 导入 Tag
 import { getCleanArticleContent } from '../services/api';
 import { useArticleStore, selectSelectedArticle } from '../store/articleStore';
 import { useArticleMetadata } from '../hooks/useArticleMetadata';
+import { getRandomColorClass } from '../utils/colorUtils';
 
 interface ArticleDetailProps {
   article: Article;
@@ -12,10 +13,6 @@ interface ArticleDetailProps {
   availableUserTags: Tag[]; // 【新增】接收 props
 }
 
-
-// 【新增】辅助函数，用于给标签随机上色
-const tagColorClasses = [ 'bg-sky-100 text-sky-800', 'bg-emerald-100 text-emerald-800', 'bg-violet-100 text-violet-800', 'bg-rose-100 text-rose-800', 'bg-amber-100 text-amber-800', 'bg-cyan-100 text-cyan-800' ];
-const getRandomColorClass = (key: string) => { let hash = 0; for (let i = 0; i < key.length; i++) { hash = key.charCodeAt(i) + ((hash << 5) - hash); } const index = Math.abs(hash % tagColorClasses.length); return tagColorClasses[index]; };
 
 
 function stripLeadingTitle(contentHtml: string, title: string): string {

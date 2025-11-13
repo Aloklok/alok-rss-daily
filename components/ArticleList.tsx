@@ -4,6 +4,7 @@ import React, { memo, useMemo } from 'react';
 import { Article, Filter, Tag } from '../types';
 import { useArticleStore } from '../store/articleStore';
 import { useArticleMetadata } from '../hooks/useArticleMetadata';
+import { getRandomColorClass } from '../utils/colorUtils';
 
 interface ArticleListProps {
   articleIds: (string | number)[];
@@ -18,21 +19,10 @@ const GRADIENTS = [
     'from-lime-400 via-emerald-500 to-cyan-500'
 ];
 
-const tagColorClasses = [ 'bg-sky-100 text-sky-800', 'bg-emerald-100 text-emerald-800', 'bg-violet-100 text-violet-800', 'bg-rose-100 text-rose-800', 'bg-amber-100 text-amber-800', 'bg-cyan-100 text-cyan-800' ];
-const getRandomColorClass = (key: string) => { let hash = 0; for (let i = 0; i < key.length; i++) { hash = key.charCodeAt(i) + ((hash << 5) - hash); } const index = Math.abs(hash % tagColorClasses.length); return tagColorClasses[index]; };
 
-const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, isLoading, availableUserTags }) => {
-  const articlesById = useArticleStore((state) => state.articlesById);
-  const activeFilter = useArticleStore((state) => state.activeFilter);
-  const articles = articleIds.map(id => articlesById[id]).filter(Boolean) as Article[];
 
-  const randomGradient = useMemo(() => {
-    if (!activeFilter) return GRADIENTS[0];
-    const hash = activeFilter.value.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
-    return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
-  }, [activeFilter]);
-
-  const ArticleListItem: React.FC<{ article: Article; onOpenArticle: (article: Article) => void }> = ({ article, onOpenArticle }) => {
+// 1. 【修改】将 ArticleListItem 组件的定义移至 ArticleList 组件外部
+const ArticleListItem: React.FC<{ article: Article; onOpenArticle: (article: Article) => void }> = ({ article, onOpenArticle }) => {
     const { isStarred, userTagLabels: displayedUserTags } = useArticleMetadata(article);
 
     return (
@@ -54,6 +44,22 @@ const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, is
         </div>
     );
 };
+// 2. 【增加】为 memo 化的组件添加 displayName，便于调试
+ArticleListItem.displayName = 'ArticleListItem';
+
+
+const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, isLoading, availableUserTags }) => {
+  const articlesById = useArticleStore((state) => state.articlesById);
+  const activeFilter = useArticleStore((state) => state.activeFilter);
+  const articles = articleIds.map(id => articlesById[id]).filter(Boolean) as Article[];
+
+  const randomGradient = useMemo(() => {
+    if (!activeFilter) return GRADIENTS[0];
+    const hash = activeFilter.value.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
+    return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
+  }, [activeFilter]);
+
+  // 3. 【删除】ArticleListItem 组件的内部定义已移除
 
   const filterLabel = useMemo(() => {
     if (!activeFilter) return '文章';
@@ -87,6 +93,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, is
       </header>
       <div className="space-y-0.5">
       {articles.map((article) => (
+            // 4. 【查】现在这里调用的是在外部定义的、稳定的 ArticleListItem 组件
             <ArticleListItem key={article.id} article={article} onOpenArticle={onOpenArticle} />
         ))}
       </div>
