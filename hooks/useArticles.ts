@@ -84,24 +84,36 @@ export const useUpdateArticleState = () => {
 
     return useMutation({
         mutationFn: async ({ articleId, tagsToAdd, tagsToRemove }: { articleId: string | number, tagsToAdd: string[], tagsToRemove: string[] }) => {
-            // 【查】这段逻辑现在可以完美处理收藏和已读的切换
-            const stateTagsToAdd = tagsToAdd.filter(t => t.startsWith('user/-/state'));
-            const stateTagsToRemove = tagsToRemove.filter(t => t.startsWith('user/-/state'));
-            for (const tag of stateTagsToAdd) {
-                if (tag.includes('starred')) await editArticleState(articleId, 'star', true);
-                if (tag.includes('read')) await editArticleState(articleId, 'read', true);
-            }
-            for (const tag of stateTagsToRemove) {
-                if (tag.includes('starred')) await editArticleState(articleId, 'star', false);
-                if (tag.includes('read')) await editArticleState(articleId, 'read', false);
-            }
-            
-            const userTagsToAdd = tagsToAdd.filter(t => !t.startsWith('user/-/state'));
-            const userTagsToRemove = tagsToRemove.filter(t => !t.startsWith('user/-/state'));
-            if (userTagsToAdd.length > 0 || userTagsToRemove.length > 0) {
-                await editArticleTag(articleId, userTagsToAdd, userTagsToRemove);
-            }
+             // 2. 【增加】创建一个数组来收集所有需要执行的 promise
+             const apiPromises: Promise<any>[] = [];
 
+             // --- 处理状态标签 (收藏/已读) ---
+             const stateTagsToAdd = tagsToAdd.filter(t => t.startsWith('user/-/state'));
+             const stateTagsToRemove = tagsToRemove.filter(t => t.startsWith('user/-/state'));
+ 
+             for (const tag of stateTagsToAdd) {
+                 if (tag.includes('starred')) apiPromises.push(editArticleState(articleId, 'star', true));
+                 if (tag.includes('read')) apiPromises.push(editArticleState(articleId, 'read', true));
+             }
+             for (const tag of stateTagsToRemove) {
+                 if (tag.includes('starred')) apiPromises.push(editArticleState(articleId, 'star', false));
+                 if (tag.includes('read')) apiPromises.push(editArticleState(articleId, 'read', false));
+             }
+             
+             // --- 处理用户自定义标签 ---
+             const userTagsToAdd = tagsToAdd.filter(t => !t.startsWith('user/-/state'));
+             const userTagsToRemove = tagsToRemove.filter(t => !t.startsWith('user/-/state'));
+ 
+             if (userTagsToAdd.length > 0 || userTagsToRemove.length > 0) {
+                 apiPromises.push(editArticleTag(articleId, userTagsToAdd, userTagsToRemove));
+             }
+ 
+             // 3. 【修改】使用 Promise.all 来并行执行所有 API 请求
+             // 只有当所有请求都成功时，才会继续往下执行
+             await Promise.all(apiPromises);
+ 
+
+            
             // API 成功后，计算并返回最新的文章对象
             const articleToUpdate = articlesById[articleId];
             if (!articleToUpdate) throw new Error("Article not found in store");
@@ -128,26 +140,16 @@ export const useUpdateArticleState = () => {
 // 5. 批量标记已读
 export const useMarkAllAsRead = () => {
     const queryClient = useQueryClient();
-    const updateArticle = useArticleStore((state) => state.updateArticle);
-    const articlesById = useArticleStore((state) => state.articlesById);
-
+    // 2. 【增加】获取新的批量更新 action
+    const markArticlesAsRead = useArticleStore((state) => state.markArticlesAsRead);
+    const articlesById = useArticleStore((state) => state.articlesById); // 保持不变，可能未来需要
     return useMutation({
         mutationFn: apiMarkAllAsRead,
         onSuccess: (markedIds) => {
             // markedIds 是从 apiMarkAllAsRead 成功返回的 ID 列表
             if (!markedIds || markedIds.length === 0) return;
-
-            const READ_TAG = 'user/-/state/com.google/read';
-            markedIds.forEach(id => {
-                const articleToUpdate = articlesById[id];
-                // 确保文章存在且尚未被标记为已读
-                if (articleToUpdate && !articleToUpdate.tags?.includes(READ_TAG)) {
-                    updateArticle({
-                        ...articleToUpdate,
-                        tags: [...(articleToUpdate.tags || []), READ_TAG],
-                    });
-                }
-            });
+            // 用一次调用替代整个 forEach 循环
+            markArticlesAsRead(markedIds);
         },
         onError: (err, variables, context) => {
             console.error("Failed to mark as read:", err);

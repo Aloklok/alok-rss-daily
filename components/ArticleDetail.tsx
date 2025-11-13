@@ -10,7 +10,6 @@ import { getRandomColorClass } from '../utils/colorUtils';
 interface ArticleDetailProps {
   article: Article;
   onClose?: () => void;
-  availableUserTags: Tag[]; // 【新增】接收 props
 }
 
 
@@ -36,7 +35,7 @@ function stripLeadingTitle(contentHtml: string, title: string): string {
   return contentHtml;
 }
 
-const ArticleDetail: React.FC<ArticleDetailProps> = ({ article, onClose, availableUserTags }) => {
+const ArticleDetail: React.FC<ArticleDetailProps> = ({ article, onClose}) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [content, setContent] = useState<CleanArticleContent | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -2,16 +2,17 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Article, Tag } from '../types';
+import { useArticleStore } from '../store/articleStore';
 
 interface TagPopoverProps {
     article: Article;
-    availableUserTags: Tag[];
     onClose: () => void;
     // 【核心修改】让 onStateChange 返回 Promise<any> 或 Promise<void>
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<any>;
 }
 
-const TagPopover: React.FC<TagPopoverProps> = ({ article, availableUserTags, onClose, onStateChange }) => {
+const TagPopover: React.FC<TagPopoverProps> = ({ article, onClose, onStateChange }) => {
+    const availableUserTags = useArticleStore(state => state.availableFilters.tags);
     const validUserTagIds = useMemo(() => new Set(availableUserTags.map(t => t.id)), [availableUserTags]);
     const originalUserTags = useMemo(() => new Set((article.tags || []).filter(tagOnArticle => validUserTagIds.has(tagOnArticle))), [article.tags, validUserTagIds]);
 

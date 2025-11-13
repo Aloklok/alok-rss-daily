@@ -33,13 +33,12 @@ Callout.displayName = 'Callout';
 
 interface ActionButtonsProps {
     article: Article;
-    availableUserTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
     className?: string;
 }
 
-const ActionButtons: React.FC<ActionButtonsProps> = memo(({ article, availableUserTags, onReaderModeRequest, onStateChange, className }) => {
+const ActionButtons: React.FC<ActionButtonsProps> = memo(({ article, onReaderModeRequest, onStateChange, className }) => {
     const STAR_TAG = 'user/-/state/com.google/starred';
     const READ_TAG = 'user/-/state/com.google/read';
     const { isStarred, isRead, userTagLabels: displayedUserTags } = useArticleMetadata(article);
@@ -94,7 +93,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = memo(({ article, availableUs
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                                 标签
                             </button>
-                            {isTagPopoverOpen && <TagPopover article={article} availableUserTags={availableUserTags} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
+                            {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
                         </div>
                         {displayedUserTags.length > 0 && (
                             <div className="hidden md:flex flex-wrap gap-2 items-center">
@@ -137,7 +136,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = memo(({ article, availableUs
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a1 1 0 011-1h5a.997.997 0 01.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                             <span className="text-xs sr-only">标签</span>
                         </button>
-                        {isTagPopoverOpen && <TagPopover article={article} availableUserTags={availableUserTags} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
+                        {isTagPopoverOpen && <TagPopover article={article} onClose={() => setIsTagPopoverOpen(false)} onStateChange={onStateChange} />}
                     </div>
                     <a href={article.link} target="_blank" rel="noopener noreferrer" className={`${mobileActionButtonClass} text-gray-600`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
@@ -158,13 +157,12 @@ ActionButtons.displayName = 'ActionButtons';
 
 interface ArticleCardProps {
     article: Article;
-    availableUserTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
     showActions?: boolean;
 }
 
-const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags = [], onReaderModeRequest, onStateChange, showActions = true }) => {
+const ArticleCard: React.FC<ArticleCardProps> = ({ article,onReaderModeRequest, onStateChange, showActions = true }) => {
     // 2. 【删除】内部组件定义已全部移出
     const { isStarred } = useArticleMetadata(article);
     const publishedDate = new Date(article.published).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
@@ -210,7 +208,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, availableUserTags = 
                 <Callout title="值得注意" content={article.critiques} />
                 <Callout title="市场观察" content={article.marketTake} />
             </div>
-            {showActions && <ActionButtons article={article} availableUserTags={availableUserTags} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />}
+            {showActions && <ActionButtons article={article} onReaderModeRequest={onReaderModeRequest} onStateChange={onStateChange} />}
         </article>
     );
 };

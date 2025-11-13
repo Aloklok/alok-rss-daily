@@ -15,7 +15,6 @@ interface ReaderViewProps {
     content: CleanArticleContent | null;
     article: Article | null;
     onClose: () => void;
-    availableUserTags: Tag[]; // 新增：可用的用户标签
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => void; // 新增：状态变更回调
     onGoHome: () => void; // 新增：返回首页回调
 }
@@ -26,7 +25,6 @@ const ReaderView: React.FC<ReaderViewProps> = ({
     content,
     article,
     onClose,
-    availableUserTags,
     onStateChange,
     onGoHome
 }) => {
@@ -148,8 +146,6 @@ const ReaderView: React.FC<ReaderViewProps> = ({
                                 </button>
                                 {isTagPopoverOpen && article && (
                                     <TagPopover 
-                                        article={article} 
-                                        availableUserTags={availableUserTags}
                                         onClose={() => setIsTagPopoverOpen(false)} 
                                         onStateChange={onStateChange} 
                                     />

@@ -15,12 +15,11 @@ const DecorativeDivider = () => (
 interface ArticleGroupProps {
     importance: string;
     articles: Article[];
-    availableUserTags: Tag[];
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
 }
 
-const ArticleGroup: React.FC<ArticleGroupProps> = ({ importance, articles, availableUserTags, onReaderModeRequest, onStateChange }) => {
+const ArticleGroup: React.FC<ArticleGroupProps> = ({ importance, articles,onReaderModeRequest, onStateChange }) => {
     if (!articles || articles.length === 0) {
         return null;
     }
@@ -43,7 +42,6 @@ const ArticleGroup: React.FC<ArticleGroupProps> = ({ importance, articles, avail
                         <div id={`article-${article.id}`}>
                             <ArticleCard
                                 article={article}
-                                availableUserTags={availableUserTags}
                                 onReaderModeRequest={onReaderModeRequest}
                                 onStateChange={onStateChange}
                             />

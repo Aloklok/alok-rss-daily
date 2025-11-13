@@ -6,14 +6,12 @@ import ArticleGroup from './ArticleGroup';
 import { useArticleStore } from '../store/articleStore';
 
 interface ReportContentProps {
-    report: BriefingReport[]; 
-    availableUserTags: Tag[];
+    report: BriefingReport; 
     onReaderModeRequest: (article: Article) => void;
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
-    articleCount: number;
 }
 
-const ReportContent: React.FC<ReportContentProps> = ({ report, availableUserTags, onReaderModeRequest, onStateChange }) => {
+const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeRequest, onStateChange }) => {
     const importanceOrder = ['重要新闻', '必知要闻', '常规更新'];
 
     const handleJump = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
@@ -97,7 +95,6 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, availableUserTags
                         key={importance}
                         importance={importance}
                         articles={report.articles[importance]}
-                        availableUserTags={availableUserTags}
                         onReaderModeRequest={onReaderModeRequest}
                         onStateChange={onStateChange}
                     />
@@ -111,13 +108,13 @@ interface BriefingProps {
   reports: BriefingReport[];
   timeSlot: 'morning' | 'afternoon' | 'evening' | null;
   selectedReportId: number | null;
-  availableUserTags: Tag[];
   onReportSelect: (id: number) => void;
   onReaderModeRequest: (article: Article) => void;
   onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
   onTimeSlotChange: (slot: 'morning' | 'afternoon' | 'evening' | null) => void;
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  articleCount: number;
 }
 
 const GRADIENTS = [
@@ -126,7 +123,7 @@ const GRADIENTS = [
     'from-lime-400 via-emerald-500 to-cyan-500'
 ];
 
-const Briefing: React.FC<BriefingProps> = ({ reports, timeSlot, selectedReportId, availableUserTags, onReportSelect, onReaderModeRequest, onStateChange, onTimeSlotChange, isSidebarCollapsed, onToggleSidebar,articleCount }) => {
+const Briefing: React.FC<BriefingProps> = ({ reports, timeSlot, selectedReportId,onReportSelect, onReaderModeRequest, onStateChange, onTimeSlotChange, isSidebarCollapsed, onToggleSidebar,articleCount}) => {
   const activeFilter = useArticleStore(state => state.activeFilter);
   const selectedReport = reports.find(r => r.id === selectedReportId);
 
@@ -245,7 +242,6 @@ const Briefing: React.FC<BriefingProps> = ({ reports, timeSlot, selectedReportId
                     <ReportContent 
                         key={report.id} 
                         report={report} 
-                        availableUserTags={availableUserTags}
                         onReaderModeRequest={onReaderModeRequest}
                         onStateChange={onStateChange}
                     />

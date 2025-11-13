@@ -34,6 +34,7 @@ interface ArticleStoreState {
   selectedArticleId: string | number | null;
   isReaderVisible: boolean;
   availableFilters: AvailableFilters;
+  markArticlesAsRead: (ids: (string | number)[]) => void;
   addArticles: (articles: Article[]) => void;
   updateArticle: (updatedArticle: Article) => void;
   setStarredArticleIds: (ids: (string | number)[]) => void;
@@ -46,6 +47,7 @@ interface ArticleStoreState {
 }
 
 const STAR_TAG = 'user/-/state/com.google/starred';
+const READ_TAG = 'user/-/state/com.google/read'; // 2. 【增加】将 READ_TAG 移到外部，方便复用
 const isUserTag = (tagId: string) => !tagId.includes('/state/com.google/') && !tagId.includes('/state/org.freshrss/');
 
 export const useArticleStore = create<ArticleStoreState>((set, get) => ({
@@ -116,7 +118,33 @@ export const useArticleStore = create<ArticleStoreState>((set, get) => ({
       };
     });
   },
+  // 3. 【增加】实现新的 markArticlesAsRead action
+  markArticlesAsRead: (idsToMark) => {
+    if (!idsToMark || idsToMark.length === 0) return;
 
+    set((state) => {
+      // 复制一份当前的 articlesById，以遵循不可变性原则
+      const newArticlesById = { ...state.articlesById };
+      let hasChanged = false; // 标记状态是否真的发生了变化
+
+      idsToMark.forEach(id => {
+        const article = newArticlesById[id];
+        // 确保文章存在且尚未被标记为已读
+        if (article && !article.tags?.includes(READ_TAG)) {
+          // 创建一个新的 article 对象，并更新其 tags
+          newArticlesById[id] = {
+            ...article,
+            tags: [...(article.tags || []), READ_TAG],
+          };
+          hasChanged = true;
+        }
+      });
+
+      // 只有在至少一篇文章的状态被更新时，才返回新的 state 对象
+      // 这可以避免不必要的组件重渲染
+      return hasChanged ? { articlesById: newArticlesById } : {};
+    });
+  },
   setStarredArticleIds: (ids) => {
     // 当从 API 获取完整的收藏列表时，直接设置
     set({ starredArticleIds: ids });

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Article, Tag } from '../types';
 import TagPopover from './TagPopover';
 import { useArticleMetadata } from '../hooks/useArticleMetadata';
+import { useArticleStore } from '../store/articleStore';
 
 interface FloatingActionButtonsProps {
     selectedArticle: Article | null;
@@ -11,7 +12,6 @@ interface FloatingActionButtonsProps {
     isUpdatingArticle: boolean;
     isMarkingAsRead: boolean;
     hasUnreadInView: boolean;
-    availableUserTags: Tag[];
     onArticleStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => void;
     onMarkAllClick: () => void;
     onRefreshToHome: () => void;
@@ -23,7 +23,6 @@ const FloatingActionButtons: React.FC<FloatingActionButtonsProps> = ({
     isUpdatingArticle,
     isMarkingAsRead,
     hasUnreadInView,
-    availableUserTags,
     onArticleStateChange,
     onMarkAllClick,
     onRefreshToHome,
@@ -58,7 +57,6 @@ const FloatingActionButtons: React.FC<FloatingActionButtonsProps> = ({
                         {isTagPopoverOpen && (
                             <TagPopover 
                                 article={selectedArticle} 
-                                availableUserTags={availableUserTags}
                                 onClose={() => setIsTagPopoverOpen(false)} 
                                 onStateChange={onArticleStateChange} 
                             />

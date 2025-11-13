@@ -10,7 +10,6 @@ interface ArticleListProps {
   articleIds: (string | number)[];
   onOpenArticle: (article: Article) => void;
   isLoading: boolean;
-  availableUserTags: Tag[];
 }
 
 const GRADIENTS = [
@@ -48,7 +47,7 @@ const ArticleListItem: React.FC<{ article: Article; onOpenArticle: (article: Art
 ArticleListItem.displayName = 'ArticleListItem';
 
 
-const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, isLoading, availableUserTags }) => {
+const ArticleList: React.FC<ArticleListProps> = ({ articleIds, onOpenArticle, isLoading}) => {
   const articlesById = useArticleStore((state) => state.articlesById);
   const activeFilter = useArticleStore((state) => state.activeFilter);
   const articles = articleIds.map(id => articlesById[id]).filter(Boolean) as Article[];
