@@ -60,6 +60,6 @@ export interface AvailableFilters {
     tags: Tag[];       // 【修改】使用 Tag 类型
 }
 export type Filter = {
-  type: 'date' | 'category' | 'tag' | 'starred';
+  type: 'date' | 'category' | 'tag' | 'starred' | 'search';
   value: string;
 }

@@ -1,6 +1,6 @@
 // components/Briefing.tsx
 
-import React, { useMemo } from 'react';
+import React, { useMemo,memo } from 'react';
 import { Article, BriefingReport, Tag, Filter } from '../types';
 import ArticleGroup from './ArticleGroup';
 import { useArticleStore } from '../store/articleStore';
@@ -11,7 +11,7 @@ interface ReportContentProps {
     onStateChange: (articleId: string | number, tagsToAdd: string[], tagsToRemove: string[]) => Promise<void>;
 }
 
-const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeRequest, onStateChange }) => {
+const ReportContent: React.FC<ReportContentProps> = memo(({ report, onReaderModeRequest, onStateChange }) => {
     const importanceOrder = ['重要新闻', '必知要闻', '常规更新'];
 
     const handleJump = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
@@ -102,7 +102,8 @@ const ReportContent: React.FC<ReportContentProps> = ({ report, onReaderModeReque
             </div>
         </div>
     );
-};
+});
+ReportContent.displayName = 'ReportContent';
 
 interface BriefingProps {
   reports: BriefingReport[];
@@ -262,4 +263,4 @@ const Briefing: React.FC<BriefingProps> = ({ reports, timeSlot, selectedReportId
   );
 };
 
-export default Briefing;
+export default memo(Briefing);

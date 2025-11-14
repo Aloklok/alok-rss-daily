@@ -6,7 +6,8 @@ import {
     getArticlesByLabel, 
     getStarredArticles, 
     getArticlesDetails,
-    getArticleStates
+    getArticleStates,
+    searchArticlesByKeyword
 } from './api';
 import { Article } from '../types';
 
@@ -63,5 +64,21 @@ export async function fetchStarredArticleHeaders(): Promise<{ id: string | numbe
     return freshArticles.map(article => ({
         id: article.id,
         title: article.title,
+    }));
+}
+
+// 2. 【增加】一个新的加载器函数，用于搜索
+export async function fetchSearchResults(query: string): Promise<Article[]> {
+    // 首先从 Supabase 获取包含核心内容的文章
+    const supaArticles = await searchArticlesByKeyword(query);
+    if (supaArticles.length === 0) return [];
+
+    // 然后，像简报一样，为这些文章补充 FreshRSS 的状态
+    const articleIds = supaArticles.map(a => a.id);
+    const statesById = await getArticleStates(articleIds);
+
+    return supaArticles.map(supaArticle => ({
+        ...supaArticle,
+        tags: statesById[supaArticle.id] || [],
     }));
 }

@@ -68,7 +68,6 @@ const Sidebar = React.memo<SidebarProps>(({
     availableMonths,
     selectedMonth,
     onMonthChange,
-    availableFilters,
     onRefresh,
     datesForMonth,
     dailyStatuses, // 【增】
@@ -76,7 +75,10 @@ const Sidebar = React.memo<SidebarProps>(({
     onOpenArticle
 }) => {
     const activeFilter = useArticleStore(state => state.activeFilter);
+    // 2. 【增加】在这里从 Zustand store 中直接获取 availableFilters
+    const availableFilters = useArticleStore(state => state.availableFilters);
     const setActiveFilter = useArticleStore(state => state.setActiveFilter);
+    const [searchQuery, setSearchQuery] = useState(''); // 2. 【增加】搜索框的本地状态
     const selectedArticleId = useArticleStore(state => state.selectedArticleId);
     const setSelectedArticleId = useArticleStore(state => state.setSelectedArticleId);
     const {
@@ -90,6 +92,14 @@ const Sidebar = React.memo<SidebarProps>(({
         starredCount,
     } = useSidebar();
 
+    const handleSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmedQuery = searchQuery.trim();
+        if (trimmedQuery) {
+            setActiveFilter({ type: 'search', value: trimmedQuery });
+            // 可以在这里增加逻辑，如果用户在移动端，则自动收起侧边栏
+        }
+    };
     // 1. 【核心修改】为“分类”添加折叠状态
     const [categoriesExpanded, setCategoriesExpanded] = useState(false);
 
@@ -280,6 +290,21 @@ const renderFiltersTab = () => (
                 </button>
             </div>
             
+             {/* 3. 【增加】搜索表单 */}
+             <form onSubmit={handleSearchSubmit} className="relative">
+                <input
+                    type="search"
+                    placeholder="搜索简报关键词..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </div>
+            </form>
+
+
             <div className="flex items-center gap-2 p-1 bg-gray-200 rounded-lg">
                 <button className={`flex-1 ${tabButtonClass(activeTab === 'filters')}`} onClick={() => setActiveTab('filters')}>
                     <div className="flex justify-center items-center gap-2"><span>🏷️</span><span>分类</span></div>
@@ -290,7 +315,17 @@ const renderFiltersTab = () => (
             </div>
 
             <div className="flex-grow overflow-y-scroll">
-                {activeTab === 'filters' ? renderFiltersTab() : renderCalendarTab()}
+                  {/* 
+                   【优化】使用 CSS 显隐替代条件渲染 
+                   两个 Tab 的内容都会被渲染，但只有激活的那个是可见的。
+                   这样滚动位置和展开状态就不会丢失了。
+                */}
+                <div className={activeTab === 'filters' ? 'block h-full' : 'hidden'}>
+                    {renderFiltersTab()}
+                </div>
+                <div className={activeTab === 'calendar' ? 'block h-full' : 'hidden'}>
+                    {renderCalendarTab()}
+                </div>
             </div>
         </aside>
       );

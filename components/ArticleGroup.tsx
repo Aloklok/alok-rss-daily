@@ -1,6 +1,6 @@
 // components/ArticleGroup.tsx
 
-import React from 'react';
+import React,{memo}from 'react';
 import { Article, Tag } from '../types';
 import ArticleCard from './ArticleCard';
 
@@ -56,4 +56,4 @@ const ArticleGroup: React.FC<ArticleGroupProps> = ({ importance, articles,onRead
     );
 };
 
-export default ArticleGroup;
+export default memo(ArticleGroup);

@@ -263,3 +263,13 @@ export const updateDailyStatus = (date: string, isCompleted: boolean): Promise<{
         body: { date: date, is_completed: isCompleted },
     });
 };
+
+
+
+
+// 【增加】搜索文章
+export const searchArticlesByKeyword = (query: string): Promise<Article[]> => {
+    return apiService.request<Article[]>('/api/search-articles', {
+        params: { query },
+    }).catch(() => []);
+};

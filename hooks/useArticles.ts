@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
     fetchBriefingArticles, 
     fetchFilteredArticles, 
+    fetchSearchResults,
     fetchStarredArticleHeaders 
 } from '../services/articleLoader'; // 1. 【核心修改】从新的加载器导入
 import { getRawStarredArticles,editArticleTag, editArticleState, markAllAsRead as apiMarkAllAsRead } from '../services/api';
@@ -154,5 +155,22 @@ export const useMarkAllAsRead = () => {
         onError: (err, variables, context) => {
             console.error("Failed to mark as read:", err);
         },
+    });
+};
+
+
+
+// 2. 【增加】在文件末尾添加新的 useSearchResults Hook
+export const useSearchResults = (query: string | null) => {
+    const addArticles = useArticleStore(state => state.addArticles);
+    return useQuery({
+        queryKey: ['search', query],
+        queryFn: async () => {
+            if (!query) return [];
+            const completeArticles = await fetchSearchResults(query);
+            addArticles(completeArticles);
+            return completeArticles.map(a => a.id);
+        },
+        enabled: !!query, // 只有当 query 存在时才执行
     });
 };

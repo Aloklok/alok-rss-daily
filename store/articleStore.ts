@@ -30,6 +30,10 @@ interface ArticleStoreState {
   articlesById: Record<string | number, Article>;
   starredArticleIds: (string | number)[]; // 【修改】从 Set 改为 Array
   activeFilter: Filter | null;
+  // 1. 【增加】新的状态，用于控制简报详情面板的显示
+  briefingDetailArticleId: string | number | null;
+  // 2. 【增加】设置新状态的 action
+  setBriefingDetailArticleId: (id: string | number | null) => void;
   timeSlot: 'morning' | 'afternoon' | 'evening' | null; // 【增】
   selectedArticleId: string | number | null;
   isReaderVisible: boolean;
@@ -57,6 +61,9 @@ export const useArticleStore = create<ArticleStoreState>((set, get) => ({
   timeSlot: null, // 【增】
   selectedArticleId: null,
   isReaderVisible: false,
+  briefingDetailArticleId: null, // 3. 【增加】初始化新状态
+  // 4. 【增加】实现新 action
+  setBriefingDetailArticleId: (id) => set({ briefingDetailArticleId: id }),
   availableFilters: { categories: [], tags: [] },
   addArticles: (articles) => {
     if (!articles || articles.length === 0) return;
@@ -182,4 +189,11 @@ export const useArticleStore = create<ArticleStoreState>((set, get) => ({
 export const selectSelectedArticle = (state: ArticleStoreState) => {
   if (!state.selectedArticleId) return null;
   return state.articlesById[state.selectedArticleId] || null;
+};
+
+
+// 5. 【增加】为新状态创建一个 selector，方便获取完整的文章对象
+export const selectBriefingDetailArticle = (state: ArticleStoreState) => {
+  if (!state.briefingDetailArticleId) return null;
+  return state.articlesById[state.briefingDetailArticleId] || null;
 };

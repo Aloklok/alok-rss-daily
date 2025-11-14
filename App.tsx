@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import FloatingActionButtons from './components/FloatingActionButtons'; // 【增】导入新组件
+import BriefingDetailView from './components/BriefingDetailView';
 import Sidebar from './components/Sidebar';
 import Briefing from './components/Briefing';
 import ReaderView from './components/ReaderView';
@@ -10,7 +11,7 @@ import ArticleList from './components/ArticleList';
 import LoadingSpinner from './components/LoadingSpinner';
 import Toast from './components/Toast';
 import { Article, Tag, BriefingReport, GroupedArticles, Filter } from './types';
-import { useArticleStore, selectSelectedArticle } from './store/articleStore';
+import { useArticleStore, selectSelectedArticle,selectBriefingDetailArticle } from './store/articleStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFilters } from './hooks/useFilters';
 import { useReader } from './hooks/useReader';
@@ -19,7 +20,8 @@ import {
     useBriefingArticles, 
     useFilteredArticles, 
     useUpdateArticleState,
-    useMarkAllAsRead
+    useMarkAllAsRead,
+    useSearchResults
 } from './hooks/useArticles';
 import { useArticleMetadata } from './hooks/useArticleMetadata'; // 【增】导入 Hook
 
@@ -29,11 +31,31 @@ const App: React.FC = () => {
     const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: 'success' | 'error' | 'info' }>({ isVisible: false, message: '', type: 'info' });
     const queryClient = useQueryClient();
 
+    const briefingDetailArticleId = useArticleStore(state => state.briefingDetailArticleId);
+    const setBriefingDetailArticleId = useArticleStore(state => state.setBriefingDetailArticleId);
+    const briefingDetailArticle = useArticleStore(selectBriefingDetailArticle);
+
+
+ // 2. 【增加】一个新的处理函数，专门用于打开 ArticleList 中的文章详情
+ const handleOpenArticleListDetail = useCallback((article: Article) => {
+    // 这个函数设置新状态，打开 BriefingDetailView，而不是 ReaderView
+    setBriefingDetailArticleId(article.id);
+}, [setBriefingDetailArticleId]);
+
+
     // 只有当 activeFilter 是今天的日期时，我们才在 state 初始化时设置时间槽。
     // 对于历史日期，它应该默认为 null (全天)。
     const activeFilter = useArticleStore(state => state.activeFilter);
     const timeSlot = useArticleStore(state => state.timeSlot);
     const setTimeSlot = useArticleStore(state => state.setTimeSlot);
+
+
+    // 2. 【增加】调用 useSearchResults Hook
+    // 当 activeFilter.type 是 'search' 时，这个 hook 才会被激活
+    const { data: searchResultIds, isLoading: isSearchLoading } = useSearchResults(
+        activeFilter?.type === 'search' ? activeFilter.value : null
+    );
+
 
     const articlesById = useArticleStore((state) => state.articlesById);
     const setSelectedArticleId = useArticleStore(state => state.setSelectedArticleId);
@@ -221,7 +243,7 @@ const onMonthChange = useCallback((month: string) => {
 
     const mainContentRef = useRef<HTMLDivElement | null>(null);
     
-    const isLoading = isInitialLoad || isBriefingLoading || isFilterLoading || isBriefingFetching;
+    const isLoading = isInitialLoad || isBriefingLoading || isFilterLoading || isBriefingFetching || isSearchLoading;
 
     useEffect(() => {
         if (!isSidebarCollapsed && !isMdUp) {
@@ -251,7 +273,6 @@ const onMonthChange = useCallback((month: string) => {
                     availableMonths={availableMonths}
                     selectedMonth={selectedMonth}
                     onMonthChange={onMonthChange}
-                    availableFilters={availableFilters}
                     onOpenArticle={handleOpenArticle}
                     onRefresh={refreshFilters}
                     datesForMonth={datesForMonth}
@@ -301,14 +322,12 @@ const onMonthChange = useCallback((month: string) => {
                    <ArticleDetail 
                     article={sidebarArticle} 
                     onClose={handleCloseArticleDetail}
-                    availableUserTags={availableFilters.tags} // 【新增】
                   />
                 ) : activeFilter?.type === 'date' ? (
                     <Briefing 
                         reports={reports} 
                         timeSlot={timeSlot}
                         selectedReportId={reports[0]?.id || null}
-                        availableUserTags={availableFilters.tags}
                         onReportSelect={() => {}}
                         onReaderModeRequest={handleOpenReader}
                         onStateChange={handleArticleStateChange}
@@ -317,12 +336,11 @@ const onMonthChange = useCallback((month: string) => {
                         onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                         articleCount={briefingArticleIds?.length || 0}
                     />
-                ) : (activeFilter?.type === 'category' || activeFilter?.type === 'tag') ? (
+                ) : (activeFilter?.type === 'category' || activeFilter?.type === 'tag' || activeFilter?.type === 'search') ? (
                     <ArticleList
-                        articleIds={filteredArticleIds}
-                        onOpenArticle={handleOpenReader}
+                        articleIds={activeFilter.type === 'search' ? (searchResultIds || []) : filteredArticleIds}
+                        onOpenArticle={handleOpenArticleListDetail}
                         isLoading={isLoading}
-                        availableUserTags={availableFilters.tags}
                     />
                 ) : (
                     <div className="p-8 text-center text-gray-500">选择一个分类或标签查看文章。</div>
@@ -334,7 +352,6 @@ const onMonthChange = useCallback((month: string) => {
                 isBriefingFetching={isBriefingFetching}
                 isUpdatingArticle={isUpdatingArticle}
                 isMarkingAsRead={isMarkingAsRead}
-                availableUserTags={availableFilters.tags}
                 hasUnreadInView={unreadArticleIdsInView.length > 0}
                 onArticleStateChange={handleArticleStateChange}
                 onMarkAllClick={handleMarkAllClick}
@@ -346,11 +363,16 @@ const onMonthChange = useCallback((month: string) => {
                     isLoading={isReaderLoading}
                     content={readerContent}
                     onClose={handleCloseReader}
-                    availableUserTags={availableFilters.tags}
                     onStateChange={handleArticleStateChange}
                     onGoHome={handleRefreshToHome}
                     article={articleForReader}
                 />
+                 {briefingDetailArticle && (
+                        <BriefingDetailView
+                            article={briefingDetailArticle}
+                            onClose={() => setBriefingDetailArticleId(null)}
+                        />
+                    )}
                 <Toast 
                     message={toast.message} 
                     isVisible={toast.isVisible} 
